@@ -61,6 +61,8 @@ let jsonArea = null;
 let exportJsonBtn = null;
 let importJsonBtn = null;
 let copyJsonBtn = null;
+let localSaveBtn = null;
+let localLoadBtn = null;
 
 // Mode controls
 let modeRadios = null;
