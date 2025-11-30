@@ -477,7 +477,7 @@ export function generate3DScene() {
   let walkYaw = 0;
   let walkPitch = 0;
   const eyeHeight = 72;
-  const walkSpeed = 10;
+  const walkSpeed = 2;
   const walkRadius = 10;
   const keysPressed = new Set();
 
@@ -642,8 +642,11 @@ export function generate3DScene() {
   function handleWalkMovement() {
     if (!walkMode) return;
 
-    const forwardX = Math.sin(walkYaw);
-    const forwardZ = Math.cos(walkYaw);
+    const forwardX = Math.sin(walkYaw) * Math.cos(walkPitch);
+    const forwardY = Math.sin(walkPitch);
+    const forwardZ = Math.cos(walkYaw) * Math.cos(walkPitch);
+    
+    // Right vector is perpendicular to forward in the horizontal plane
     const rightX = Math.cos(walkYaw);
     const rightZ = -Math.sin(walkYaw);
 
@@ -658,12 +661,12 @@ export function generate3DScene() {
       moveZ -= forwardZ * walkSpeed;
     }
     if (keysPressed.has('ArrowLeft') || keysPressed.has('KeyA')) {
-      moveX -= rightX * walkSpeed;
-      moveZ -= rightZ * walkSpeed;
-    }
-    if (keysPressed.has('ArrowRight') || keysPressed.has('KeyD')) {
       moveX += rightX * walkSpeed;
       moveZ += rightZ * walkSpeed;
+    }
+    if (keysPressed.has('ArrowRight') || keysPressed.has('KeyD')) {
+      moveX -= rightX * walkSpeed;
+      moveZ -= rightZ * walkSpeed;
     }
 
     if (moveX !== 0 || moveZ !== 0) {
@@ -707,7 +710,27 @@ export function generate3DScene() {
       orbitTheta: threeCamera.orbitTheta
     };
 
-    threeCamera.position.set(centerX, eyeHeight, centerZ);
+    // Find a safe spawn position outside the structure
+    let spawnX = centerX;
+    let spawnZ = centerZ;
+    let found = false;
+    
+    // Try to find a position outside all walls by moving outward from center
+    for (let dist = radius * 0.3; dist < radius && !found; dist += 20) {
+      for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+        const testX = centerX + Math.cos(angle) * dist;
+        const testZ = centerZ + Math.sin(angle) * dist;
+        
+        if (!isPositionColliding(testX, testZ)) {
+          spawnX = testX;
+          spawnZ = testZ;
+          found = true;
+          break;
+        }
+      }
+    }
+
+    threeCamera.position.set(spawnX, eyeHeight, spawnZ);
     walkYaw = 0;
     walkPitch = 0;
     updateWalkCamera();
