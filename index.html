@@ -16,6 +16,7 @@
         • <strong>Draw</strong> mode: left‑click + drag to add walls/doors/windows.<br />
         • <strong>Select / edit</strong> mode: click a line to select, drag endpoints.<br />
         • Scroll to <strong>zoom</strong>, right‑drag to <strong>pan</strong>.<br />
+        • Delete/Backspace removes selected element.<br />
         • Delete/Backspace removes selected element.
       </small>
     </div>
@@ -57,7 +58,7 @@
         </label>
       </div>
 
-      <div class="field">
+      <div class="field" id="doorSettingsField" style="display:none;">
         <label for="doorHeightInput">Door height (new doors)</label>
         <input
           type="text"
@@ -66,7 +67,7 @@
           placeholder="e.g. 80&quot;, 6' 8&quot;"
         />
       </div>
-      <div class="field">
+      <div class="field" id="doorOffsetSettingsField" style="display:none;">
         <label for="doorBaseOffsetInput">Door bottom offset from floor</label>
         <input
           type="text"
@@ -76,7 +77,7 @@
         />
       </div>
 
-      <div class="field">
+      <div class="field" id="windowSettingsField" style="display:none;">
         <label for="windowHeightInput">Window height (new windows)</label>
         <input
           type="text"
@@ -85,7 +86,7 @@
           placeholder="e.g. 3', 4'"
         />
       </div>
-      <div class="field">
+      <div class="field" id="windowOffsetSettingsField" style="display:none;">
         <label for="windowBaseOffsetInput">Window bottom offset from floor</label>
         <input
           type="text"
@@ -95,13 +96,13 @@
         />
       </div>
 
-      <div class="hint">
+      <div class="hint" id="elementTypeHint" style="display:none;">
         These defaults are used when drawing new doors/windows.<br />
         You can tweak height/offset later per element in the Selected panel.
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="selectedElementPanel" style="display:none;">
       <h2>Selected Element</h2>
       <div class="info-line">
         <span class="info-label">Type:</span>
@@ -305,6 +306,10 @@
       <div class="field" style="flex-direction: row; gap: 6px;">
         <button id="exportJsonBtn" style="flex: 1;">Export</button>
         <button id="importJsonBtn" style="flex: 1;">Import</button>
+      </div>
+      <div class="field" style="flex-direction: row; gap: 6px;">
+        <button id="localSaveBtn" style="flex: 1;">💾 Local Save</button>
+        <button id="localLoadBtn" style="flex: 1;">📂 Local Load</button>
       </div>
       <div class="hint">
         Accepts either:<br />

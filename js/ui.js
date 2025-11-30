@@ -31,6 +31,7 @@ export function updateSelectionPanel() {
   
   const flipWallFacingField = dom.getFlipWallFacingField();
   const flipWallFacingHint = dom.getFlipWallFacingHint();
+  const selectedElementPanel = document.getElementById("selectedElementPanel");
 
   const line = state.getSelectedLine();
   if (!line) {
@@ -54,8 +55,13 @@ export function updateSelectionPanel() {
     // Hide flip wall facing
     if (flipWallFacingField) flipWallFacingField.style.display = "none";
     if (flipWallFacingHint) flipWallFacingHint.style.display = "none";
+    // Hide entire Selected Element panel
+    if (selectedElementPanel) selectedElementPanel.style.display = "none";
     return;
   }
+
+  // Show Selected Element panel
+  if (selectedElementPanel) selectedElementPanel.style.display = "flex";
 
   const kind = lineKind(line);
   const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1);
@@ -553,6 +559,16 @@ export function initUIEventHandlers() {
   exportJsonBtn.addEventListener("click", exportToJson);
   importJsonBtn.addEventListener("click", importFromJson);
   
+  // Local Save/Load
+  const localSaveBtn = dom.getLocalSaveBtn();
+  const localLoadBtn = dom.getLocalLoadBtn();
+  if (localSaveBtn) {
+    localSaveBtn.addEventListener("click", saveToLocalStorage);
+  }
+  if (localLoadBtn) {
+    localLoadBtn.addEventListener("click", loadFromLocalStorage);
+  }
+  
   // Copy to clipboard
   const copyJsonBtn = dom.getCopyJsonBtn();
   if (copyJsonBtn) {
@@ -585,6 +601,72 @@ export function initUIEventHandlers() {
   elementTypeRadios.forEach((r) => {
     r.addEventListener("change", () => {
       state.setElementType(r.value);
+      updateElementTypeVisibility();
     });
   });
+}
+
+// === Update element type visibility =============================
+
+function updateElementTypeVisibility() {
+  const elementType = state.getElementType();
+  const doorSettingsField = document.getElementById("doorSettingsField");
+  const doorOffsetSettingsField = document.getElementById("doorOffsetSettingsField");
+  const windowSettingsField = document.getElementById("windowSettingsField");
+  const windowOffsetSettingsField = document.getElementById("windowOffsetSettingsField");
+  const elementTypeHint = document.getElementById("elementTypeHint");
+
+  const showDoor = elementType === "door";
+  const showWindow = elementType === "window";
+
+  if (doorSettingsField) doorSettingsField.style.display = showDoor ? "flex" : "none";
+  if (doorOffsetSettingsField) doorOffsetSettingsField.style.display = showDoor ? "flex" : "none";
+  if (windowSettingsField) windowSettingsField.style.display = showWindow ? "flex" : "none";
+  if (windowOffsetSettingsField) windowOffsetSettingsField.style.display = showWindow ? "flex" : "none";
+  if (elementTypeHint) elementTypeHint.style.display = (showDoor || showWindow) ? "block" : "none";
+}
+
+// === Local Storage Save/Load ====================================
+
+function saveToLocalStorage() {
+  const lines = state.getLines();
+  const data = {
+    lines,
+    timestamp: new Date().toISOString()
+  };
+  const json = JSON.stringify(data, null, 2);
+  
+  try {
+    localStorage.setItem("ezfloorplan_autosave", json);
+    const btn = dom.getLocalSaveBtn();
+    const originalText = btn.textContent;
+    btn.textContent = "✓ Saved";
+    setTimeout(() => {
+      btn.textContent = originalText;
+    }, 1500);
+  } catch (err) {
+    alert("Failed to save to local storage: " + err.message);
+  }
+}
+
+function loadFromLocalStorage() {
+  try {
+    const json = localStorage.getItem("ezfloorplan_autosave");
+    if (!json) {
+      alert("No local save found");
+      return;
+    }
+    
+    const data = JSON.parse(json);
+    if (data.lines && Array.isArray(data.lines)) {
+      state.setLines(data.lines);
+      state.setNextLineId(Math.max(...data.lines.map(l => l.id), 0) + 1);
+      state.setSelectedLineId(null);
+      state.setSelectedLines([]);
+      updateSelectionPanel();
+      draw();
+    }
+  } catch (err) {
+    alert("Failed to load from local storage: " + err.message);
+  }
 }

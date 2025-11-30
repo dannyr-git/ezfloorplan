@@ -122,6 +122,8 @@ export function initDOM() {
   exportJsonBtn = document.getElementById("exportJsonBtn");
   importJsonBtn = document.getElementById("importJsonBtn");
   copyJsonBtn = document.getElementById("copyJsonBtn");
+  localSaveBtn = document.getElementById("localSaveBtn");
+  localLoadBtn = document.getElementById("localLoadBtn");
 
   modeRadios = document.querySelectorAll('input[name="mode"]');
   elementTypeRadios = document.querySelectorAll('input[name="elementType"]');
@@ -182,6 +184,8 @@ export function getJsonArea() { return jsonArea; }
 export function getExportJsonBtn() { return exportJsonBtn; }
 export function getImportJsonBtn() { return importJsonBtn; }
 export function getCopyJsonBtn() { return copyJsonBtn; }
+export function getLocalSaveBtn() { return localSaveBtn; }
+export function getLocalLoadBtn() { return localLoadBtn; }
 
 export function getModeRadios() { return modeRadios; }
 export function getElementTypeRadios() { return elementTypeRadios; }
