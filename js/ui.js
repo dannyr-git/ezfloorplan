@@ -604,6 +604,26 @@ export function initUIEventHandlers() {
       updateElementTypeVisibility();
     });
   });
+
+  // Default element settings - auto-convert inches
+  const doorHeightInput = dom.getDoorHeightInput();
+  const doorBaseOffsetInput = dom.getDoorBaseOffsetInput();
+  const windowHeightInput = dom.getWindowHeightInput();
+  const windowBaseOffsetInput = dom.getWindowBaseOffsetInput();
+
+  function autoConvertInput(input) {
+    input.addEventListener("blur", () => {
+      const inches = parseLengthToInches(input.value);
+      if (inches != null && isFinite(inches) && inches > 0) {
+        input.value = formatInchesToFeetInches(inches, 2);
+      }
+    });
+  }
+
+  if (doorHeightInput) autoConvertInput(doorHeightInput);
+  if (doorBaseOffsetInput) autoConvertInput(doorBaseOffsetInput);
+  if (windowHeightInput) autoConvertInput(windowHeightInput);
+  if (windowBaseOffsetInput) autoConvertInput(windowBaseOffsetInput);
 }
 
 // === Update element type visibility =============================
