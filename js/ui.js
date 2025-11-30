@@ -338,9 +338,27 @@ function exportToJson() {
     if (l.baseOffsetInches != null && isFinite(l.baseOffsetInches)) {
       obj.baseOffsetInches = +l.baseOffsetInches;
     }
+    if (l.facingFlipped) {
+      obj.facingFlipped = true;
+    }
     return obj;
   });
-  const obj = { lines: simpleLines };
+  
+  // Get wall and trim settings
+  const showWallsCheckbox = dom.getShowWallsCheckbox();
+  const wallThicknessInput = dom.getWallThicknessInput();
+  const ceilingHeightInput = dom.getCeilingHeightInput();
+  const doorTrimInput = dom.getDoorTrimInput();
+  const windowTrimInput = dom.getWindowTrimInput();
+  
+  const settings = {};
+  if (showWallsCheckbox) settings.showWalls = showWallsCheckbox.checked;
+  if (wallThicknessInput && wallThicknessInput.value) settings.wallThickness = wallThicknessInput.value;
+  if (ceilingHeightInput && ceilingHeightInput.value) settings.ceilingHeight = ceilingHeightInput.value;
+  if (doorTrimInput && doorTrimInput.value) settings.doorTrim = doorTrimInput.value;
+  if (windowTrimInput && windowTrimInput.value) settings.windowTrim = windowTrimInput.value;
+  
+  const obj = { lines: simpleLines, settings };
   jsonArea.value = JSON.stringify(obj, null, 2);
 }
 
@@ -393,11 +411,14 @@ function importFromJson() {
         ? Number(item.baseOffsetInches)
         : null;
 
+    const facingFlipped = item.facingFlipped === true;
+
     const newLine = {
       id: idCounter,
       kind,
       heightInches,
       baseOffsetInches,
+      facingFlipped,
       x1,
       y1,
       x2,
@@ -415,6 +436,33 @@ function importFromJson() {
   state.setViewScale(1);
   console.log("Imported " + newLines.length + " lines:", newLines);
   console.log("Lines in state after import:", state.getLines());
+  
+  // Restore settings if present
+  if (data && data.settings) {
+    const settings = data.settings;
+    const showWallsCheckbox = dom.getShowWallsCheckbox();
+    const wallThicknessInput = dom.getWallThicknessInput();
+    const ceilingHeightInput = dom.getCeilingHeightInput();
+    const doorTrimInput = dom.getDoorTrimInput();
+    const windowTrimInput = dom.getWindowTrimInput();
+    
+    if (showWallsCheckbox && settings.showWalls !== undefined) {
+      showWallsCheckbox.checked = settings.showWalls;
+    }
+    if (wallThicknessInput && settings.wallThickness) {
+      wallThicknessInput.value = settings.wallThickness;
+    }
+    if (ceilingHeightInput && settings.ceilingHeight) {
+      ceilingHeightInput.value = settings.ceilingHeight;
+    }
+    if (doorTrimInput && settings.doorTrim) {
+      doorTrimInput.value = settings.doorTrim;
+    }
+    if (windowTrimInput && settings.windowTrim) {
+      windowTrimInput.value = settings.windowTrim;
+    }
+  }
+  
   updateSelectionPanel();
   draw();
 }

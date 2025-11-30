@@ -54,19 +54,71 @@ export function formatInchesToFeetInches(inches, precision) {
 
   let feet = Math.floor(inches / 12);
   let remaining = inches - feet * 12;
-  let rounded = parseFloat(remaining.toFixed(precision));
-
-  if (rounded >= 12) {
-    feet += 1;
-    rounded -= 12;
+  
+  // Round to nearest 1/16th for fraction display
+  const sixteenths = Math.round(remaining * 16);
+  const wholeInches = Math.floor(sixteenths / 16);
+  const fracSixteenths = sixteenths % 16;
+  
+  // Adjust if we rounded up to 16/16
+  let finalFeet = feet;
+  let finalWholeInches = wholeInches;
+  let finalFracSixteenths = fracSixteenths;
+  
+  if (finalWholeInches >= 12) {
+    finalFeet += 1;
+    finalWholeInches -= 12;
+  }
+  
+  // Convert sixteenths to simplified fraction
+  let inchesStr = "";
+  if (finalFracSixteenths === 0) {
+    inchesStr = String(finalWholeInches);
+  } else {
+    // Simplify the fraction
+    const fracStr = simplifyFraction(finalFracSixteenths, 16);
+    if (finalWholeInches === 0) {
+      inchesStr = fracStr;
+    } else {
+      inchesStr = finalWholeInches + " " + fracStr;
+    }
   }
 
-  let inchesStr =
-    precision === 0 ? String(Math.round(rounded)) : rounded.toFixed(precision);
-  inchesStr = parseFloat(inchesStr).toString();
-
-  let result = feet + "'" + " " + inchesStr + '"';
+  let result = finalFeet + "'" + " " + inchesStr + '"';
   return negative ? "-" + result : result;
+}
+
+function simplifyFraction(numerator, denominator) {
+  // Find GCD
+  function gcd(a, b) {
+    return b === 0 ? a : gcd(b, a % b);
+  }
+  
+  const divisor = gcd(numerator, denominator);
+  const num = numerator / divisor;
+  const den = denominator / divisor;
+  
+  // Use Unicode fraction characters for common fractions
+  const fractionMap = {
+    "1/2": "½",
+    "1/4": "¼",
+    "3/4": "¾",
+    "1/8": "⅛",
+    "3/8": "⅜",
+    "5/8": "⅝",
+    "7/8": "⅞",
+    "1/16": "¹⁄₁₆",
+    "3/16": "³⁄₁₆",
+    "5/16": "⁵⁄₁₆",
+    "7/16": "⁷⁄₁₆",
+    "9/16": "⁹⁄₁₆",
+    "11/16": "¹¹⁄₁₆",
+    "13/16": "¹³⁄₁₆",
+    "15/16": "¹⁵⁄₁₆"
+  };
+  
+  const fracKey = num + "/" + den;
+  return fractionMap[fracKey] || fracKey;
 }
 
 // === Geometry helpers ============================================

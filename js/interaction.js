@@ -318,7 +318,7 @@ function handleWheel(e) {
   const worldBefore = screenToWorld(sx, sy);
 
   const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-  const newScale = Math.min(4, Math.max(0.25, state.getViewScale() * zoomFactor));
+  const newScale = Math.min(20, Math.max(0.1, state.getViewScale() * zoomFactor));
   state.setViewScale(newScale);
 
   state.setViewOffsetX(worldBefore.x - sx / state.getViewScale());
