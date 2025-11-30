@@ -24,6 +24,7 @@ const appState = {
 
   // Selection
   selectedLineId: null,
+  selectedLines: [], // Array of line IDs for multi-select
 
   // Panning state
   isPanning: false,
@@ -67,6 +68,7 @@ export function getUndoHistory() { return appState.undoHistory; }
 export function getIsDrawing() { return appState.isDrawing; }
 export function getCurrentDrawing() { return appState.currentDrawing; }
 export function getSelectedLineId() { return appState.selectedLineId; }
+export function getSelectedLines() { return appState.selectedLines; }
 export function getIsPanning() { return appState.isPanning; }
 export function getPanStartScreenX() { return appState.panStartScreenX; }
 export function getPanStartScreenY() { return appState.panStartScreenY; }
@@ -93,6 +95,7 @@ export function setNextLineId(val) { appState.nextLineId = val; }
 export function setIsDrawing(val) { appState.isDrawing = val; }
 export function setCurrentDrawing(val) { appState.currentDrawing = val; }
 export function setSelectedLineId(val) { appState.selectedLineId = val; }
+export function setSelectedLines(val) { appState.selectedLines = val || []; }
 export function setIsPanning(val) { appState.isPanning = val; }
 export function setPanStartScreenX(val) { appState.panStartScreenX = val; }
 export function setPanStartScreenY(val) { appState.panStartScreenY = val; }
@@ -137,7 +140,8 @@ export function saveState() {
     x1: l.x1,
     y1: l.y1,
     x2: l.x2,
-    y2: l.y2
+    y2: l.y2,
+    facingFlipped: l.facingFlipped
   })));
   appState.undoHistory.push(state);
   if (appState.undoHistory.length > MAX_UNDO_STEPS) {

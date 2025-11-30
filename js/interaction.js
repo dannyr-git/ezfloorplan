@@ -2,7 +2,7 @@ import * as state from './state.js';
 import * as dom from './dom.js';
 import { draw, screenToWorld, updateHoverJoint } from './renderer-2d.js';
 import { updateSelectionPanel } from './ui.js';
-import { parseLengthToInches, distancePointToSegmentWorld } from './utils.js';
+import { parseLengthToInches, distancePointToSegmentWorld, lineKind } from './utils.js';
 
 // === Helper functions ============================================
 
@@ -122,6 +122,40 @@ export function snapPoint(worldRaw, anchorWorld) {
   return { x: wx, y: wy };
 }
 
+// === Selection box and clipboard ================================
+
+let selectionBox = null; // { x1, y1, x2, y2 } in world coords
+let clipboard = null; // Array of copied lines
+let dragMultiSelectStartPos = null; // Track if we're dragging multi-selected lines
+
+function getLinesBoundingBox(lines) {
+  if (lines.length === 0) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const l of lines) {
+    minX = Math.min(minX, l.x1, l.x2);
+    maxX = Math.max(maxX, l.x1, l.x2);
+    minY = Math.min(minY, l.y1, l.y2);
+    maxY = Math.max(maxY, l.y1, l.y2);
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function linesInBox(box) {
+  const selected = [];
+  for (const l of state.getLines()) {
+    const x1 = Math.min(l.x1, l.x2);
+    const x2 = Math.max(l.x1, l.x2);
+    const y1 = Math.min(l.y1, l.y2);
+    const y2 = Math.max(l.y1, l.y2);
+    
+    // Check if line overlaps with box
+    if (x2 >= box.x1 && x1 <= box.x2 && y2 >= box.y1 && y1 <= box.y2) {
+      selected.push(l);
+    }
+  }
+  return selected;
+}
+
 // === Event handlers ==============================================
 
 export function initCanvasEventHandlers() {
@@ -164,10 +198,25 @@ function handleMouseDown(evt) {
       return;
     }
 
+    // Check if clicking on a multi-selected line
+    const selectedIds = state.getSelectedLines ? state.getSelectedLines() : [];
+    if (selectedIds.length > 0) {
+      const line = findLineAtPoint(worldPt, 6);
+      if (line && selectedIds.includes(line.id)) {
+        // Start dragging all selected lines
+        dragMultiSelectStartPos = { worldPt, screenPos: { sx, sy } };
+        state.saveState();
+        state.setDragStateSaved(true);
+        return;
+      }
+    }
+
     const line = findLineAtPoint(worldPt, 6);
     if (line) {
       selectLine(line);
     } else {
+      // Start drag selection
+      selectionBox = { x1: worldPt.x, y1: worldPt.y, x2: worldPt.x, y2: worldPt.y };
       selectLine(null);
     }
     return;
@@ -225,6 +274,28 @@ function handleMouseMove(evt) {
     return;
   }
 
+  // Handle dragging multi-selected lines
+  if (state.getMode() === "select" && dragMultiSelectStartPos && state.getDragStateSaved()) {
+    const deltaX = worldPt.x - dragMultiSelectStartPos.worldPt.x;
+    const deltaY = worldPt.y - dragMultiSelectStartPos.worldPt.y;
+    
+    const selectedIds = state.getSelectedLines ? state.getSelectedLines() : [];
+    for (const lineId of selectedIds) {
+      const line = state.getLineById(lineId);
+      if (line) {
+        line.x1 += deltaX;
+        line.y1 += deltaY;
+        line.x2 += deltaX;
+        line.y2 += deltaY;
+      }
+    }
+    
+    dragMultiSelectStartPos.worldPt = { x: worldPt.x, y: worldPt.y };
+    updateSelectionPanel();
+    draw();
+    return;
+  }
+
   if (state.getMode() === "draw" && state.getIsDrawing() && state.getCurrentDrawing()) {
     const snappedEnd = snapPoint(worldPt, {
       x: state.getCurrentDrawing().x1,
@@ -255,6 +326,15 @@ function handleMouseMove(evt) {
       line.y2 = snapped.y;
     }
     updateSelectionPanel();
+    draw();
+    return;
+  }
+
+  // Update drag selection box
+  if (state.getMode() === "select" && selectionBox) {
+    selectionBox.x2 = worldPt.x;
+    selectionBox.y2 = worldPt.y;
+    window.__selectionBox = selectionBox;
     draw();
     return;
   }
@@ -300,6 +380,22 @@ function handleMouseUp() {
     state.setDraggingEndpoint(null);
     state.setDragStateSaved(false);
   }
+
+  // Finish multi-select drag
+  if (state.getMode() === "select" && dragMultiSelectStartPos && state.getDragStateSaved()) {
+    dragMultiSelectStartPos = null;
+    state.setDragStateSaved(false);
+  }
+
+  // Finish drag selection box
+  if (state.getMode() === "select" && selectionBox) {
+    const selected = linesInBox(selectionBox);
+    selectionBox = null;
+    window.__selectionBox = null;
+    // Select all lines in the box (for now, just highlight them)
+    state.setSelectedLines(selected.map(l => l.id));
+    draw();
+  }
 }
 
 function handleMouseLeave() {
@@ -336,7 +432,7 @@ export function initKeyboardEventHandlers() {
 function handleKeyDown(e) {
   const target = e.target;
   if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
-    if (!(e.ctrlKey && e.key === "z")) {
+    if (!(e.ctrlKey && (e.key === "z" || e.key === "c"))) {
       return;
     }
   }
@@ -346,6 +442,7 @@ function handleKeyDown(e) {
     state.undo({
       onUndo: () => {
         state.setSelectedLineId(null);
+        state.setSelectedLines([]);
         updateSelectionPanel();
       }
     });
@@ -353,6 +450,104 @@ function handleKeyDown(e) {
     state.setInlineLengthInput("");
     draw();
     return;
+  }
+
+  // Copy selected lines
+  if (e.ctrlKey && e.key === "c") {
+    e.preventDefault();
+    const selectedIds = state.getSelectedLines ? state.getSelectedLines() : [];
+    if (selectedIds.length > 0) {
+      clipboard = selectedIds.map(id => state.getLineById(id)).filter(l => l).map(l => ({
+        ...l,
+        id: undefined // Remove ID so pasted lines get new IDs
+      }));
+    } else if (state.getSelectedLineId()) {
+      const line = state.getSelectedLine();
+      if (line) {
+        clipboard = [{ ...line, id: undefined }];
+      }
+    }
+    return;
+  }
+
+  // Paste lines (only in canvas, not in input fields)
+  if (e.ctrlKey && e.key === "v" && !(target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA"))) {
+    e.preventDefault();
+    if (clipboard && clipboard.length > 0) {
+      state.saveState();
+      const box = getLinesBoundingBox(clipboard);
+      const offsetX = box ? box.minX : 0;
+      const offsetY = box ? box.minY : 0;
+      
+      const pastedIds = [];
+      for (const line of clipboard) {
+        const newLine = {
+          ...line,
+          id: state.getNextLineId(),
+          x1: line.x1 - offsetX + 50,
+          y1: line.y1 - offsetY + 50,
+          x2: line.x2 - offsetX + 50,
+          y2: line.y2 - offsetY + 50,
+        };
+        state.addLine(newLine);
+        state.setNextLineId(state.getNextLineId() + 1);
+        pastedIds.push(newLine.id);
+      }
+      state.setSelectedLines(pastedIds);
+      updateSelectionPanel();
+      draw();
+    }
+    return;
+  }
+
+  // Flip facing direction(s) with F key
+  if (e.key === "f" || e.key === "F") {
+    e.preventDefault();
+    const selectedIds = state.getSelectedLines ? state.getSelectedLines() : [];
+    if (selectedIds.length > 0) {
+      state.saveState();
+      for (const lineId of selectedIds) {
+        const line = state.getLineById(lineId);
+        if (line && lineKind(line) === "wall") {
+          line.facingFlipped = !line.facingFlipped;
+        }
+      }
+      draw();
+    } else if (state.getSelectedLineId()) {
+      const line = state.getSelectedLine();
+      if (line && lineKind(line) === "wall") {
+        state.saveState();
+        line.facingFlipped = !line.facingFlipped;
+        draw();
+      }
+    }
+    return;
+  }
+
+  // Delete single or multiple selections
+  if ((e.key === "Delete" || e.key === "Backspace") && !state.getIsTypingLength()) {
+    const selectedIds = state.getSelectedLines ? state.getSelectedLines() : [];
+    if (selectedIds.length > 0) {
+      state.saveState();
+      for (const lineId of selectedIds) {
+        state.removeLine(lineId);
+      }
+      state.setSelectedLines([]);
+      state.setSelectedLineId(null);
+      updateSelectionPanel();
+      draw();
+      e.preventDefault();
+      return;
+    } else if (state.getSelectedLineId() != null) {
+      state.saveState();
+      state.removeLine(state.getSelectedLineId());
+      state.setSelectedLineId(null);
+      state.setSelectedLines([]);
+      updateSelectionPanel();
+      draw();
+      e.preventDefault();
+      return;
+    }
   }
 
   if (state.getSelectedLineId() != null) {
@@ -407,14 +602,5 @@ function handleKeyDown(e) {
       e.preventDefault();
       return;
     }
-  }
-
-  if ((e.key === "Delete" || e.key === "Backspace") && state.getSelectedLineId() != null && !state.getIsTypingLength()) {
-    state.saveState();
-    state.removeLine(state.getSelectedLineId());
-    state.setSelectedLineId(null);
-    updateSelectionPanel();
-    draw();
-    e.preventDefault();
   }
 }

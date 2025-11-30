@@ -671,6 +671,37 @@ export function draw() {
     ctx.fill();
   }
 
+  // Draw selection box
+  if (window.__selectionBox) {
+    const box = window.__selectionBox;
+    const sx1 = worldToScreenX(Math.min(box.x1, box.x2));
+    const sy1 = worldToScreenY(Math.min(box.y1, box.y2));
+    const sx2 = worldToScreenX(Math.max(box.x1, box.x2));
+    const sy2 = worldToScreenY(Math.max(box.y1, box.y2));
+    
+    ctx.strokeStyle = "rgba(100, 150, 255, 0.7)";
+    ctx.fillStyle = "rgba(100, 150, 255, 0.1)";
+    ctx.lineWidth = 2;
+    ctx.fillRect(sx1, sy1, sx2 - sx1, sy2 - sy1);
+    ctx.strokeRect(sx1, sy1, sx2 - sx1, sy2 - sy1);
+  }
+
+  // Highlight multi-selected lines
+  const selectedLines = state.getSelectedLines();
+  if (selectedLines && selectedLines.length > 0) {
+    ctx.strokeStyle = "#FF9800";
+    ctx.lineWidth = 3;
+    for (const lineId of selectedLines) {
+      const line = state.getLineById(lineId);
+      if (line) {
+        ctx.beginPath();
+        ctx.moveTo(worldToScreenX(line.x1), worldToScreenY(line.y1));
+        ctx.lineTo(worldToScreenX(line.x2), worldToScreenY(line.y2));
+        ctx.stroke();
+      }
+    }
+  }
+
   // Inline length input display
   if (state.getIsTypingLength() && state.getSelectedLineId() != null) {
     const line = state.getSelectedLine();
