@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Floor Plan Sketcher 3D</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="sidebar">
+    <div>
+      <h1>Floor Plan Sketcher 3D</h1>
+      <small>
+        • <strong>Draw</strong> mode: left‑click + drag to add walls/doors/windows.<br />
+        • <strong>Select / edit</strong> mode: click a line to select, drag endpoints.<br />
+        • Scroll to <strong>zoom</strong>, right‑drag to <strong>pan</strong>.<br />
+        • Delete/Backspace removes selected element.
+      </small>
+    </div>
+
+    <div class="panel">
+      <h2>Mode</h2>
+      <div class="mode-toggle">
+        <label>
+          <input type="radio" name="mode" value="draw" checked />
+          Draw (click + drag)
+        </label>
+        <label>
+          <input type="radio" name="mode" value="select" />
+          Select / edit
+        </label>
+      </div>
+      <div class="hint">
+        In <strong>Select / edit</strong> mode:<br />
+        – Click a line to select it.<br />
+        – Drag an endpoint to move it (snaps to grid, endpoints & axis).<br />
+        – Hit Delete/Backspace to remove it.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Element type</h2>
+      <div class="mode-toggle">
+        <label>
+          <input type="radio" name="elementType" value="wall" checked />
+          Wall
+        </label>
+        <label>
+          <input type="radio" name="elementType" value="door" />
+          Door
+        </label>
+        <label>
+          <input type="radio" name="elementType" value="window" />
+          Window
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="doorHeightInput">Door height (new doors)</label>
+        <input
+          type="text"
+          id="doorHeightInput"
+          value="6' 8&quot;"
+          placeholder="e.g. 80&quot;, 6' 8&quot;"
+        />
+      </div>
+      <div class="field">
+        <label for="doorBaseOffsetInput">Door bottom offset from floor</label>
+        <input
+          type="text"
+          id="doorBaseOffsetInput"
+          value="0&quot;"
+          placeholder="e.g. 0&quot;, 1&quot;"
+        />
+      </div>
+
+      <div class="field">
+        <label for="windowHeightInput">Window height (new windows)</label>
+        <input
+          type="text"
+          id="windowHeightInput"
+          value="4'"
+          placeholder="e.g. 3', 4'"
+        />
+      </div>
+      <div class="field">
+        <label for="windowBaseOffsetInput">Window bottom offset from floor</label>
+        <input
+          type="text"
+          id="windowBaseOffsetInput"
+          value="3'"
+          placeholder="e.g. 3', 4'"
+        />
+      </div>
+
+      <div class="hint">
+        These defaults are used when drawing new doors/windows.<br />
+        You can tweak height/offset later per element in the Selected panel.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Selected Element</h2>
+      <div class="info-line">
+        <span class="info-label">Type:</span>
+        <span class="info-value" id="selectedTypeDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Length:</span>
+        <span class="info-value" id="lengthDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Raw inches:</span>
+        <span class="info-value" id="lengthInchesDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Angle:</span>
+        <span class="info-value" id="angleDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Height:</span>
+        <span class="info-value" id="selectedHeightDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Bottom offset:</span>
+        <span class="info-value" id="selectedOffsetDisplay">—</span>
+      </div>
+      <div class="info-line" id="wallOffsetStartLine" style="display:none;">
+        <span class="info-label">From wall start:</span>
+        <span class="info-value" id="wallOffsetStartDisplay">—</span>
+      </div>
+      <div class="info-line" id="wallOffsetEndLine" style="display:none;">
+        <span class="info-label">From wall end:</span>
+        <span class="info-value" id="wallOffsetEndDisplay">—</span>
+      </div>
+
+      <div class="field">
+        <label for="lengthInput">Edit length</label>
+        <input
+          type="text"
+          id="lengthInput"
+          placeholder="e.g. 10', 120&quot;, 10' 6&quot;, 100.5"
+        />
+      </div>
+      <div class="field">
+        <button id="applyLengthBtn">Apply new length</button>
+      </div>
+
+      <div class="field">
+        <label for="angleInput">Angle (degrees)</label>
+        <input
+          type="number"
+          id="angleInput"
+          step="0.1"
+          placeholder="e.g. 0, 90, 180"
+        />
+      </div>
+      <div class="field">
+        <button id="applyAngleBtn">Apply angle</button>
+      </div>
+
+      <div class="field" id="flipWallFacingField" style="display:none;">
+        <button id="flipWallFacingBtn">Flip wall facing direction</button>
+      </div>
+      <div class="hint" id="flipWallFacingHint" style="display:none;">
+        Wall thickness extends behind the face. Click to flip which side is "behind".
+      </div>
+
+      <div class="field" id="wallOffsetStartField" style="display:none;">
+        <label for="wallOffsetStartInput">Distance from wall start</label>
+        <input
+          type="text"
+          id="wallOffsetStartInput"
+          placeholder="e.g. 2', 24&quot;"
+        />
+      </div>
+      <div class="field" id="wallOffsetStartBtnField" style="display:none;">
+        <button id="applyWallOffsetStartBtn">Apply start offset</button>
+      </div>
+
+      <div class="field" id="wallOffsetEndField" style="display:none;">
+        <label for="wallOffsetEndInput">Distance from wall end</label>
+        <input
+          type="text"
+          id="wallOffsetEndInput"
+          placeholder="e.g. 2', 24&quot;"
+        />
+      </div>
+      <div class="field" id="wallOffsetEndBtnField" style="display:none;">
+        <button id="applyWallOffsetEndBtn">Apply end offset</button>
+      </div>
+
+      <div class="field">
+        <label for="heightInput">Edit height (door/window)</label>
+        <input
+          type="text"
+          id="heightInput"
+          placeholder="e.g. 80&quot;, 6' 8&quot;"
+        />
+      </div>
+      <div class="field">
+        <button id="applyHeightBtn">Apply height</button>
+      </div>
+
+      <div class="field">
+        <label for="offsetInput">Edit bottom offset (door/window)</label>
+        <input
+          type="text"
+          id="offsetInput"
+          placeholder="e.g. 0&quot;, 3'"
+        />
+      </div>
+      <div class="field">
+        <button id="applyOffsetBtn">Apply offset</button>
+      </div>
+
+      <div class="hint">
+        Height + bottom offset together define where the opening sits
+        vertically in 3D. For doors, offset is usually <code>0"</code>; for
+        windows, often <code>3'</code> or more.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Walls, Trim & 3D</h2>
+      <div class="field">
+        <label>
+          <input type="checkbox" id="showWallsCheckbox" checked />
+          Show wall thickness in 2D
+        </label>
+      </div>
+      <div class="field">
+        <label for="wallThicknessInput">Wall thickness (inches)</label>
+        <input
+          type="number"
+          id="wallThicknessInput"
+          min="1"
+          step="0.5"
+          value="6"
+        />
+      </div>
+
+      <div class="field">
+        <label for="ceilingHeightInput">Ceiling height</label>
+        <input
+          type="text"
+          id="ceilingHeightInput"
+          value="8'"
+          placeholder="e.g. 8', 9', 10'"
+        />
+      </div>
+
+      <div class="field">
+        <label for="doorTrimInput">Door molding size</label>
+        <input
+          type="text"
+          id="doorTrimInput"
+          value="3&quot;"
+          placeholder="e.g. 2.5&quot;, 3&quot;"
+        />
+      </div>
+
+      <div class="field">
+        <label for="windowTrimInput">Window molding size</label>
+        <input
+          type="text"
+          id="windowTrimInput"
+          value="3&quot;"
+          placeholder="e.g. 2.5&quot;, 3&quot;"
+        />
+      </div>
+
+      <div class="field">
+        <button id="generate3DBtn">Generate 3D scene</button>
+      </div>
+
+      <div class="hint">
+        3D uses:<br />
+        – Ceiling height for wall extrusion<br />
+        – Door/window heights + bottom offsets<br />
+        – Trim sizing to draw simple molding frames around openings.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 style="display: flex; justify-content: space-between; align-items: center;">
+        Export / Import
+        <button id="copyJsonBtn" title="Copy to clipboard" style="padding: 2px 6px; font-size: 14px;">⧉</button>
+      </h2>
+      <div class="field">
+        <label for="jsonArea">JSON data</label>
+        <textarea
+          id="jsonArea"
+          rows="6"
+          style="
+            width: 100%;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+              'Liberation Mono', 'Courier New', monospace;
+            font-size: 11px;
+          "
+        ></textarea>
+      </div>
+      <div class="field" style="flex-direction: row; gap: 6px;">
+        <button id="exportJsonBtn" style="flex: 1;">Export</button>
+        <button id="importJsonBtn" style="flex: 1;">Import</button>
+      </div>
+      <div class="hint">
+        Accepts either:<br />
+        • <code>[{...}]</code><br />
+        • <code>{"{ \"lines\": [...] }"}</code><br />
+        Each line: <code>x1,y1,x2,y2</code>, optional
+        <code>kind,heightInches,baseOffsetInches</code>.
+      </div>
+    </div>
+  </div>
+
+  <div id="canvasContainer">
+    <canvas id="floorCanvas"></canvas>
+    <div id="threeContainer">
+      <button id="threeCloseBtn">× Close 3D</button>
+    </div>
+  </div>
+
+  <!-- Three.js for real 3D; if it fails, we still show a message -->
+  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+
+  <!-- Main application entry point -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,2579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Floor Plan Sketcher 3D</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #sidebar {
+      width: 280px;
+      border-right: 1px solid #ddd;
+      padding: 12px;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 14px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    #sidebar h1 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+
+    #sidebar small {
+      color: #666;
+      line-height: 1.4;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .panel {
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #e0e0e0;
+      background: #fff;
+    }
+
+    .panel h2 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #555;
+    }
+
+    .mode-toggle label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 4px;
+      cursor: pointer;
+    }
+
+    .mode-toggle input[type="radio"] {
+      cursor: pointer;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: #444;
+    }
+
+    .field input[type="text"],
+    .field input[type="number"] {
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 13px;
+    }
+
+    .field button {
+      padding: 5px 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: #f0f0f0;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .field button:hover {
+      background: #e6e6e6;
+    }
+
+    .info-line {
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+
+    .info-label {
+      color: #555;
+    }
+
+    .info-value {
+      font-weight: 500;
+    }
+
+    #canvasContainer {
+      flex: 1;
+      position: relative;
+      background: #ffffff;
+    }
+
+    #floorCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #ffffff;
+      cursor: crosshair;
+    }
+
+    #threeContainer {
+      position: absolute;
+      inset: 0;
+      background: #111;
+      display: none;
+      color: #f0f0f0;
+      font-size: 13px;
+    }
+
+    #threeContainer canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #threeCloseBtn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 10;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      background: rgba(240, 240, 240, 0.9);
+    }
+
+    #threeCloseBtn:hover {
+      background: #ffffff;
+    }
+
+    .three-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      max-width: 360px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 12px 16px;
+      border-radius: 6px;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #777;
+      line-height: 1.4;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+      background: #f3f3f3;
+      padding: 1px 3px;
+      border-radius: 3px;
+    }
+
+    textarea {
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div>
+      <h1>Floor Plan Sketcher 3D</h1>
+      <small>
+        • <strong>Draw</strong> mode: left‑click + drag to add walls/doors/windows.<br />
+        • <strong>Select / edit</strong> mode: click a line to select, drag endpoints.<br />
+        • Scroll to <strong>zoom</strong>, right‑drag to <strong>pan</strong>.<br />
+        • Delete/Backspace removes selected element.
+      </small>
+    </div>
+
+    <div class="panel">
+      <h2>Mode</h2>
+      <div class="mode-toggle">
+        <label>
+          <input type="radio" name="mode" value="draw" checked />
+          Draw (click + drag)
+        </label>
+        <label>
+          <input type="radio" name="mode" value="select" />
+          Select / edit
+        </label>
+      </div>
+      <div class="hint">
+        In <strong>Select / edit</strong> mode:<br />
+        – Click a line to select it.<br />
+        – Drag an endpoint to move it (snaps to grid, endpoints & axis).<br />
+        – Hit Delete/Backspace to remove it.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Element type</h2>
+      <div class="mode-toggle">
+        <label>
+          <input type="radio" name="elementType" value="wall" checked />
+          Wall
+        </label>
+        <label>
+          <input type="radio" name="elementType" value="door" />
+          Door
+        </label>
+        <label>
+          <input type="radio" name="elementType" value="window" />
+          Window
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="doorHeightInput">Door height (new doors)</label>
+        <input
+          type="text"
+          id="doorHeightInput"
+          value="6' 8&quot;"
+          placeholder="e.g. 80&quot;, 6' 8&quot;"
+        />
+      </div>
+      <div class="field">
+        <label for="doorBaseOffsetInput">Door bottom offset from floor</label>
+        <input
+          type="text"
+          id="doorBaseOffsetInput"
+          value="0&quot;"
+          placeholder="e.g. 0&quot;, 1&quot;"
+        />
+      </div>
+
+      <div class="field">
+        <label for="windowHeightInput">Window height (new windows)</label>
+        <input
+          type="text"
+          id="windowHeightInput"
+          value="4'"
+          placeholder="e.g. 3', 4'"
+        />
+      </div>
+      <div class="field">
+        <label for="windowBaseOffsetInput">Window bottom offset from floor</label>
+        <input
+          type="text"
+          id="windowBaseOffsetInput"
+          value="3'"
+          placeholder="e.g. 3', 4'"
+        />
+      </div>
+
+      <div class="hint">
+        These defaults are used when drawing new doors/windows.<br />
+        You can tweak height/offset later per element in the Selected panel.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Selected Element</h2>
+      <div class="info-line">
+        <span class="info-label">Type:</span>
+        <span class="info-value" id="selectedTypeDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Length:</span>
+        <span class="info-value" id="lengthDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Raw inches:</span>
+        <span class="info-value" id="lengthInchesDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Angle:</span>
+        <span class="info-value" id="angleDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Height:</span>
+        <span class="info-value" id="selectedHeightDisplay">—</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Bottom offset:</span>
+        <span class="info-value" id="selectedOffsetDisplay">—</span>
+      </div>
+      <div class="info-line" id="wallOffsetStartLine" style="display:none;">
+        <span class="info-label">From wall start:</span>
+        <span class="info-value" id="wallOffsetStartDisplay">—</span>
+      </div>
+      <div class="info-line" id="wallOffsetEndLine" style="display:none;">
+        <span class="info-label">From wall end:</span>
+        <span class="info-value" id="wallOffsetEndDisplay">—</span>
+      </div>
+
+      <div class="field">
+        <label for="lengthInput">Edit length</label>
+        <input
+          type="text"
+          id="lengthInput"
+          placeholder="e.g. 10', 120&quot;, 10' 6&quot;, 100.5"
+        />
+      </div>
+      <div class="field">
+        <button id="applyLengthBtn">Apply new length</button>
+      </div>
+
+      <div class="field">
+        <label for="angleInput">Angle (degrees)</label>
+        <input
+          type="number"
+          id="angleInput"
+          step="0.1"
+          placeholder="e.g. 0, 90, 180"
+        />
+      </div>
+      <div class="field">
+        <button id="applyAngleBtn">Apply angle</button>
+      </div>
+
+      <div class="field" id="wallOffsetStartField" style="display:none;">
+        <label for="wallOffsetStartInput">Distance from wall start</label>
+        <input
+          type="text"
+          id="wallOffsetStartInput"
+          placeholder="e.g. 2', 24&quot;"
+        />
+      </div>
+      <div class="field" id="wallOffsetStartBtnField" style="display:none;">
+        <button id="applyWallOffsetStartBtn">Apply start offset</button>
+      </div>
+
+      <div class="field" id="wallOffsetEndField" style="display:none;">
+        <label for="wallOffsetEndInput">Distance from wall end</label>
+        <input
+          type="text"
+          id="wallOffsetEndInput"
+          placeholder="e.g. 2', 24&quot;"
+        />
+      </div>
+      <div class="field" id="wallOffsetEndBtnField" style="display:none;">
+        <button id="applyWallOffsetEndBtn">Apply end offset</button>
+      </div>
+
+      <div class="field">
+        <label for="heightInput">Edit height (door/window)</label>
+        <input
+          type="text"
+          id="heightInput"
+          placeholder="e.g. 80&quot;, 6' 8&quot;"
+        />
+      </div>
+      <div class="field">
+        <button id="applyHeightBtn">Apply height</button>
+      </div>
+
+      <div class="field">
+        <label for="offsetInput">Edit bottom offset (door/window)</label>
+        <input
+          type="text"
+          id="offsetInput"
+          placeholder="e.g. 0&quot;, 3'"
+        />
+      </div>
+      <div class="field">
+        <button id="applyOffsetBtn">Apply offset</button>
+      </div>
+
+      <div class="hint">
+        Height + bottom offset together define where the opening sits
+        vertically in 3D. For doors, offset is usually <code>0"</code>; for
+        windows, often <code>3'</code> or more.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Walls, Trim & 3D</h2>
+      <div class="field">
+        <label>
+          <input type="checkbox" id="showWallsCheckbox" checked />
+          Show wall thickness in 2D
+        </label>
+      </div>
+      <div class="field">
+        <label for="wallThicknessInput">Wall thickness (inches)</label>
+        <input
+          type="number"
+          id="wallThicknessInput"
+          min="1"
+          step="0.5"
+          value="6"
+        />
+      </div>
+
+      <div class="field">
+        <label for="ceilingHeightInput">Ceiling height</label>
+        <input
+          type="text"
+          id="ceilingHeightInput"
+          value="8'"
+          placeholder="e.g. 8', 9', 10'"
+        />
+      </div>
+
+      <div class="field">
+        <label for="doorTrimInput">Door molding size</label>
+        <input
+          type="text"
+          id="doorTrimInput"
+          value="3&quot;"
+          placeholder="e.g. 2.5&quot;, 3&quot;"
+        />
+      </div>
+
+      <div class="field">
+        <label for="windowTrimInput">Window molding size</label>
+        <input
+          type="text"
+          id="windowTrimInput"
+          value="3&quot;"
+          placeholder="e.g. 2.5&quot;, 3&quot;"
+        />
+      </div>
+
+      <div class="field">
+        <button id="generate3DBtn">Generate 3D scene</button>
+      </div>
+
+      <div class="hint">
+        3D uses:<br />
+        – Ceiling height for wall extrusion<br />
+        – Door/window heights + bottom offsets<br />
+        – Trim sizing to draw simple molding frames around openings.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Export / Import</h2>
+      <div class="field">
+        <label for="jsonArea">JSON data</label>
+        <textarea
+          id="jsonArea"
+          rows="6"
+          style="
+            width: 100%;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+              'Liberation Mono', 'Courier New', monospace;
+            font-size: 11px;
+          "
+        ></textarea>
+      </div>
+      <div class="field" style="flex-direction: row; gap: 6px;">
+        <button id="exportJsonBtn" style="flex: 1;">Export</button>
+        <button id="importJsonBtn" style="flex: 1;">Import</button>
+      </div>
+      <div class="hint">
+        Accepts either:<br />
+        • <code>[{...}]</code><br />
+        • <code>{"{ \"lines\": [...] }"}</code><br />
+        Each line: <code>x1,y1,x2,y2</code>, optional
+        <code>kind,heightInches,baseOffsetInches</code>.
+      </div>
+    </div>
+  </div>
+
+  <div id="canvasContainer">
+    <canvas id="floorCanvas"></canvas>
+    <div id="threeContainer">
+      <button id="threeCloseBtn">× Close 3D</button>
+    </div>
+  </div>
+
+  <!-- Three.js for real 3D; if it fails, we still show a message -->
+  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+
+  <script>
+    // === Length parsing & formatting =================================
+
+    function parseLengthToInches(input) {
+      if (!input) return null;
+      let s = String(input).trim().toLowerCase();
+      if (!s) return null;
+
+      s = s.replace(/′/g, "'").replace(/″/g, '"');
+
+      // 10' 6" or 10ft 6in
+      let m = s.match(
+        /^\s*([0-9]+(?:\.[0-9]+)?)\s*(?:ft|')\s+([0-9]+(?:\.[0-9]+)?)\s*(?:in|")?\s*$/
+      );
+      if (m) {
+        const ft = parseFloat(m[1]);
+        const inches = parseFloat(m[2]);
+        if (isNaN(ft) || isNaN(inches)) return null;
+        return ft * 12 + inches;
+      }
+
+      // 10' or 10ft
+      m = s.match(/^\s*([0-9]+(?:\.[0-9]+)?)\s*(?:ft|')\s*$/);
+      if (m) {
+        const ft = parseFloat(m[1]);
+        if (isNaN(ft)) return null;
+        return ft * 12;
+      }
+
+      // 120" or 120in
+      m = s.match(/^\s*([0-9]+(?:\.[0-9]+)?)\s*(?:in|")\s*$/);
+      if (m) {
+        const inches = parseFloat(m[1]);
+        if (isNaN(inches)) return null;
+        return inches;
+      }
+
+      // bare number => decimal feet
+      m = s.match(/^\s*([0-9]+(?:\.[0-9]+)?)\s*$/);
+      if (m) {
+        const ft = parseFloat(m[1]);
+        if (isNaN(ft)) return null;
+        return ft * 12;
+      }
+
+      return null;
+    }
+
+    function formatInchesToFeetInches(inches, precision) {
+      if (inches == null || !isFinite(inches)) return "—";
+      precision = typeof precision === "number" ? precision : 2;
+
+      let negative = inches < 0;
+      if (negative) inches = -inches;
+
+      let feet = Math.floor(inches / 12);
+      let remaining = inches - feet * 12;
+      let rounded = parseFloat(remaining.toFixed(precision));
+
+      if (rounded >= 12) {
+        feet += 1;
+        rounded -= 12;
+      }
+
+      let inchesStr =
+        precision === 0 ? String(Math.round(rounded)) : rounded.toFixed(precision);
+      inchesStr = parseFloat(inchesStr).toString();
+
+      let result = feet + "'" + " " + inchesStr + '"';
+      return negative ? "-" + result : result;
+    }
+
+    // === DOM references ==============================================
+
+    const canvas = document.getElementById("floorCanvas");
+    const ctx = canvas.getContext("2d");
+    const canvasContainer = document.getElementById("canvasContainer");
+    const threeContainer = document.getElementById("threeContainer");
+    const threeCloseBtn = document.getElementById("threeCloseBtn");
+
+    const selectedTypeDisplay = document.getElementById("selectedTypeDisplay");
+    const lengthDisplay = document.getElementById("lengthDisplay");
+    const lengthInchesDisplay = document.getElementById("lengthInchesDisplay");
+    const angleDisplay = document.getElementById("angleDisplay");
+    const selectedHeightDisplay = document.getElementById("selectedHeightDisplay");
+    const selectedOffsetDisplay = document.getElementById("selectedOffsetDisplay");
+
+    const lengthInput = document.getElementById("lengthInput");
+    const applyLengthBtn = document.getElementById("applyLengthBtn");
+    const angleInput = document.getElementById("angleInput");
+    const applyAngleBtn = document.getElementById("applyAngleBtn");
+    const heightInput = document.getElementById("heightInput");
+    const applyHeightBtn = document.getElementById("applyHeightBtn");
+    const offsetInput = document.getElementById("offsetInput");
+    const applyOffsetBtn = document.getElementById("applyOffsetBtn");
+
+    // Wall position offset controls
+    const wallOffsetStartLine = document.getElementById("wallOffsetStartLine");
+    const wallOffsetEndLine = document.getElementById("wallOffsetEndLine");
+    const wallOffsetStartDisplay = document.getElementById("wallOffsetStartDisplay");
+    const wallOffsetEndDisplay = document.getElementById("wallOffsetEndDisplay");
+    const wallOffsetStartField = document.getElementById("wallOffsetStartField");
+    const wallOffsetEndField = document.getElementById("wallOffsetEndField");
+    const wallOffsetStartBtnField = document.getElementById("wallOffsetStartBtnField");
+    const wallOffsetEndBtnField = document.getElementById("wallOffsetEndBtnField");
+    const wallOffsetStartInput = document.getElementById("wallOffsetStartInput");
+    const wallOffsetEndInput = document.getElementById("wallOffsetEndInput");
+    const applyWallOffsetStartBtn = document.getElementById("applyWallOffsetStartBtn");
+    const applyWallOffsetEndBtn = document.getElementById("applyWallOffsetEndBtn");
+
+    const showWallsCheckbox = document.getElementById("showWallsCheckbox");
+    const wallThicknessInput = document.getElementById("wallThicknessInput");
+    const ceilingHeightInput = document.getElementById("ceilingHeightInput");
+    const doorTrimInput = document.getElementById("doorTrimInput");
+    const windowTrimInput = document.getElementById("windowTrimInput");
+    const generate3DBtn = document.getElementById("generate3DBtn");
+
+    const doorHeightInput = document.getElementById("doorHeightInput");
+    const doorBaseOffsetInput = document.getElementById("doorBaseOffsetInput");
+    const windowHeightInput = document.getElementById("windowHeightInput");
+    const windowBaseOffsetInput = document.getElementById("windowBaseOffsetInput");
+
+    const jsonArea = document.getElementById("jsonArea");
+    const exportJsonBtn = document.getElementById("exportJsonBtn");
+    const importJsonBtn = document.getElementById("importJsonBtn");
+
+    const modeRadios = document.querySelectorAll('input[name="mode"]');
+    const elementTypeRadios = document.querySelectorAll('input[name="elementType"]');
+
+    // === Viewport (zoom & pan) =======================================
+
+    let viewScale = 1;
+    let viewOffsetX = 0;
+    let viewOffsetY = 0;
+
+    const GRID_SPACING = 12;  // inches per grid cell
+    const SNAP_DISTANCE = 12; // px radius for snapping
+
+    function resizeCanvas() {
+      const rect = canvasContainer.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      draw();
+    }
+
+    function worldToScreenX(wx) {
+      return (wx - viewOffsetX) * viewScale;
+    }
+
+    function worldToScreenY(wy) {
+      return (wy - viewOffsetY) * viewScale;
+    }
+
+    function screenToWorld(sx, sy) {
+      return {
+        x: sx / viewScale + viewOffsetX,
+        y: sy / viewScale + viewOffsetY,
+      };
+    }
+
+    function getMousePos(evt) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        sx: evt.clientX - rect.left,
+        sy: evt.clientY - rect.top,
+      };
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    // === Model state =================================================
+
+    let mode = "draw";        // "draw" or "select"
+    let elementType = "wall"; // "wall" | "door" | "window"
+
+    // lines: { id, kind, heightInches?, baseOffsetInches?, x1,y1,x2,y2 }
+    let lines = [];
+    let nextLineId = 1;
+
+    // Undo history
+    let undoHistory = [];
+    const MAX_UNDO_STEPS = 50;
+
+    function saveState() {
+      const state = JSON.stringify(lines.map(l => ({
+        id: l.id,
+        kind: l.kind,
+        heightInches: l.heightInches,
+        baseOffsetInches: l.baseOffsetInches,
+        x1: l.x1,
+        y1: l.y1,
+        x2: l.x2,
+        y2: l.y2
+      })));
+      undoHistory.push(state);
+      if (undoHistory.length > MAX_UNDO_STEPS) {
+        undoHistory.shift();
+      }
+    }
+
+    function undo() {
+      if (undoHistory.length === 0) return;
+      const previousState = undoHistory.pop();
+      const restoredLines = JSON.parse(previousState);
+      lines = restoredLines;
+      nextLineId = Math.max(...lines.map(l => l.id), 0) + 1;
+      selectedLineId = null;
+      updateSelectionPanel();
+      draw();
+    }
+
+    let isDrawing = false;
+    let currentDrawing = null; // same shape as lines minus id
+
+    let selectedLineId = null;
+
+    let isPanning = false;
+    let panStartScreenX = 0;
+    let panStartScreenY = 0;
+    let panStartOffsetX = 0;
+    let panStartOffsetY = 0;
+
+    let draggingEndpoint = null; // { lineId, which: 'start'|'end' }
+    let dragStateSaved = false; // Track if we saved state for current drag
+
+    // Inline length typing
+    let inlineLengthInput = "";
+    let isTypingLength = false;
+
+    // joint misalignment info
+    let jointIssues = new Map(); // key -> {x,y,errorDeg,offInches}
+    let hoverJoint = null;
+
+    // Three.js objects
+    let threeRenderer = null;
+    let threeScene = null;
+    let threeCamera = null;
+
+    // === Helpers for joints ==========================================
+
+    function jointKeyFromWorld(x, y) {
+      const kx = Math.round(x * 1000) / 1000;
+      const ky = Math.round(y * 1000) / 1000;
+      return kx + "," + ky;
+    }
+
+    function recomputeJointIssues() {
+      jointIssues = new Map();
+      const joints = new Map(); // key -> array of endpoints
+
+      for (const l of lines) {
+        const endpoints = [
+          { x: l.x1, y: l.y1, line: l, which: "start" },
+          { x: l.x2, y: l.y2, line: l, which: "end" },
+        ];
+        for (const ep of endpoints) {
+          const key = jointKeyFromWorld(ep.x, ep.y);
+          if (!joints.has(key)) joints.set(key, []);
+          joints.get(key).push(ep);
+        }
+      }
+
+      for (const [key, eps] of joints.entries()) {
+        if (eps.length < 2) continue;
+        const base = eps[0];
+        const jointX = base.x;
+        const jointY = base.y;
+
+        const directions = [];
+        for (const ep of eps) {
+          const otherX = ep.which === "start" ? ep.line.x2 : ep.line.x1;
+          const otherY = ep.which === "start" ? ep.line.y2 : ep.line.y1;
+          const dx = otherX - ep.x;
+          const dy = otherY - ep.y;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len < 1e-6) continue;
+          const angleDeg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+          directions.push({ angleDeg });
+        }
+        if (directions.length < 2) continue;
+
+        let bestError = null;
+        for (let i = 0; i < directions.length; i++) {
+          for (let j = i + 1; j < directions.length; j++) {
+            let a1 = directions[i].angleDeg;
+            let a2 = directions[j].angleDeg;
+            let delta = Math.abs(a1 - a2);
+            if (delta > 180) delta = 360 - delta;
+            const errorDeg = Math.abs(delta - 90);
+            if (errorDeg < 0.1) {
+              // basically a perfect right angle
+              continue;
+            }
+            if (errorDeg <= 5) {
+              if (!bestError || errorDeg < bestError.errorDeg) {
+                bestError = { errorDeg };
+              }
+            }
+          }
+        }
+
+        if (bestError) {
+          const errorRad = (bestError.errorDeg * Math.PI) / 180;
+          const offAt12 = Math.abs(Math.tan(errorRad) * 12); // inches off at 1ft
+          jointIssues.set(key, {
+            x: jointX,
+            y: jointY,
+            errorDeg: bestError.errorDeg,
+            offInches: offAt12,
+          });
+        }
+      }
+    }
+
+    function updateHoverJoint(sx, sy) {
+      hoverJoint = null;
+      const thresholdPx = 10;
+      let best = null;
+      for (const issue of jointIssues.values()) {
+        const ssx = worldToScreenX(issue.x);
+        const ssy = worldToScreenY(issue.y);
+        const d = Math.hypot(sx - ssx, sy - ssy);
+        if (d <= thresholdPx && (!best || d < best.d)) {
+          best = { d, issue };
+        }
+      }
+      hoverJoint = best ? best.issue : null;
+    }
+
+    // === Other helpers ===============================================
+
+    function getAllPoints() {
+      const pts = [];
+      for (const l of lines) {
+        pts.push({ x: l.x1, y: l.y1 });
+        pts.push({ x: l.x2, y: l.y2 });
+      }
+      return pts;
+    }
+
+    function distancePointToSegmentWorld(px, py, x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      if (dx === 0 && dy === 0) {
+        return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+      }
+      const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+      const tClamped = Math.max(0, Math.min(1, t));
+      const cx = x1 + tClamped * dx;
+      const cy = y1 + tClamped * dy;
+      return Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+    }
+
+    function findLineAtPoint(worldPt, tolerancePx) {
+      let best = null;
+      for (const l of lines) {
+        const dWorld = distancePointToSegmentWorld(
+          worldPt.x,
+          worldPt.y,
+          l.x1,
+          l.y1,
+          l.x2,
+          l.y2
+        );
+        const dScreen = dWorld * viewScale;
+        if (dScreen <= tolerancePx && (!best || dScreen < best.dScreen)) {
+          best = { dScreen, line: l };
+        }
+      }
+      return best ? best.line : null;
+    }
+
+    function findEndpointAtScreen(sx, sy, radiusPx) {
+      let best = null;
+      for (const l of lines) {
+        const sx1 = worldToScreenX(l.x1);
+        const sy1 = worldToScreenY(l.y1);
+        const sx2 = worldToScreenX(l.x2);
+        const sy2 = worldToScreenY(l.y2);
+
+        const ds = Math.hypot(sx - sx1, sy - sy1);
+        const de = Math.hypot(sx - sx2, sy - sy2);
+
+        if (ds <= radiusPx && (!best || ds < best.d)) {
+          best = { d: ds, line: l, which: "start" };
+        }
+        if (de <= radiusPx && (!best || de < best.d)) {
+          best = { d: de, line: l, which: "end" };
+        }
+      }
+      return best;
+    }
+
+    function lineKind(l) {
+      return l.kind || "wall";
+    }
+
+    function getSelectedLine() {
+      return lines.find((l) => l.id === selectedLineId) || null;
+    }
+
+    function selectLine(line) {
+      selectedLineId = line ? line.id : null;
+      // Clear inline typing when selection changes
+      isTypingLength = false;
+      inlineLengthInput = "";
+      updateSelectionPanel();
+      draw();
+    }
+
+    function snapPoint(worldRaw, anchorWorld) {
+      let wx = worldRaw.x;
+      let wy = worldRaw.y;
+
+      let best = null;
+      const pts = getAllPoints();
+      for (const p of pts) {
+        const dx = (p.x - worldRaw.x) * viewScale;
+        const dy = (p.y - worldRaw.y) * viewScale;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d <= SNAP_DISTANCE && (!best || d < best.d)) {
+          best = { d, x: p.x, y: p.y };
+        }
+      }
+
+      const gridX = Math.round(worldRaw.x / GRID_SPACING) * GRID_SPACING;
+      const gridY = Math.round(worldRaw.y / GRID_SPACING) * GRID_SPACING;
+      const dgx = (gridX - worldRaw.x) * viewScale;
+      const dgy = (gridY - worldRaw.y) * viewScale;
+      const dg = Math.sqrt(dgx * dgx + dgy * dgy);
+      if (dg <= SNAP_DISTANCE && (!best || dg < best.d)) {
+        best = { d: dg, x: gridX, y: gridY };
+      }
+
+      if (best) {
+        wx = best.x;
+        wy = best.y;
+      }
+
+      if (anchorWorld) {
+        const dx = wx - anchorWorld.x;
+        const dy = wy - anchorWorld.y;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 0) {
+          if (absDy < absDx * 0.2) {
+            wy = anchorWorld.y; // horizontal
+          } else if (absDx < absDy * 0.2) {
+            wx = anchorWorld.x; // vertical
+          }
+        }
+      }
+
+      return { x: wx, y: wy };
+    }
+
+    // === Drawing =====================================================
+
+    function draw() {
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      recomputeJointIssues();
+
+      const worldLeft = viewOffsetX;
+      const worldTop = viewOffsetY;
+      const worldRight = viewOffsetX + w / viewScale;
+      const worldBottom = viewOffsetY + h / viewScale;
+
+      const startX = Math.floor(worldLeft / GRID_SPACING) * GRID_SPACING;
+      const endX = Math.ceil(worldRight / GRID_SPACING) * GRID_SPACING;
+      const startY = Math.floor(worldTop / GRID_SPACING) * GRID_SPACING;
+      const endY = Math.ceil(worldBottom / GRID_SPACING) * GRID_SPACING;
+
+      // Grid
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#f0f0f0";
+      ctx.beginPath();
+      for (let wx = startX; wx <= endX; wx += GRID_SPACING) {
+        const sx = worldToScreenX(wx);
+        ctx.moveTo(sx, 0);
+        ctx.lineTo(sx, h);
+      }
+      for (let wy = startY; wy <= endY; wy += GRID_SPACING) {
+        const sy = worldToScreenY(wy);
+        ctx.moveTo(0, sy);
+        ctx.lineTo(w, sy);
+      }
+      ctx.stroke();
+
+      const showWalls =
+        showWallsCheckbox && showWallsCheckbox.checked ? true : false;
+      let wallThickness = 0;
+      if (showWalls && wallThicknessInput) {
+        const val = parseFloat(wallThicknessInput.value);
+        if (isFinite(val) && val > 0) wallThickness = val;
+      }
+
+      // Thick walls for wall-kind only
+      if (showWalls && wallThickness > 0) {
+        const half = wallThickness / 2;
+        ctx.fillStyle = "#e0e0e0";
+        ctx.strokeStyle = "#cccccc";
+        ctx.lineWidth = 1;
+        for (const l of lines) {
+          if (lineKind(l) !== "wall") continue;
+          const dx = l.x2 - l.x1;
+          const dy = l.y2 - l.y1;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len === 0) continue;
+          const nx = -dy / len;
+          const ny = dx / len;
+          const ox = nx * half;
+          const oy = ny * half;
+
+          const ax1 = l.x1 + ox;
+          const ay1 = l.y1 + oy;
+          const ax2 = l.x2 + ox;
+          const ay2 = l.y2 + oy;
+          const bx1 = l.x1 - ox;
+          const by1 = l.y1 - oy;
+          const bx2 = l.x2 - ox;
+          const by2 = l.y2 - oy;
+
+          ctx.beginPath();
+          ctx.moveTo(worldToScreenX(ax1), worldToScreenY(ay1));
+          ctx.lineTo(worldToScreenX(ax2), worldToScreenY(ay2));
+          ctx.lineTo(worldToScreenX(bx2), worldToScreenY(by2));
+          ctx.lineTo(worldToScreenX(bx1), worldToScreenY(by1));
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
+      // Lines + endpoints + labels
+      for (const l of lines) {
+        const kind = lineKind(l);
+        const isSelected = l.id === selectedLineId;
+
+        let strokeColor = "#333";
+        if (kind === "door") strokeColor = "#aa5500";
+        else if (kind === "window") strokeColor = "#0074d9";
+        if (isSelected) strokeColor = "#ff4136";
+
+        const dx = l.x2 - l.x1;
+        const dy = l.y2 - l.y1;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        
+        // Screen coordinates
+        const sx1 = worldToScreenX(l.x1);
+        const sy1 = worldToScreenY(l.y1);
+        const sx2 = worldToScreenX(l.x2);
+        const sy2 = worldToScreenY(l.y2);
+        
+        // Get label text and measure it
+        const label = formatInchesToFeetInches(len, 2);
+        ctx.save();
+        ctx.font = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        const textWidth = ctx.measureText(label).width;
+        const textPadding = 6;
+        const gapWidth = textWidth + textPadding * 2;
+        ctx.restore();
+        
+        // Screen length
+        const screenLen = Math.sqrt((sx2 - sx1) ** 2 + (sy2 - sy1) ** 2);
+        
+        // Draw line with gap in center for label
+        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.strokeStyle = strokeColor;
+        
+        if (screenLen > gapWidth + 20) {
+          // Calculate gap position
+          const midSx = (sx1 + sx2) / 2;
+          const midSy = (sy1 + sy2) / 2;
+          const ux = (sx2 - sx1) / screenLen;
+          const uy = (sy2 - sy1) / screenLen;
+          
+          const gapStart = gapWidth / 2;
+          
+          // Draw first segment (start to gap)
+          ctx.beginPath();
+          ctx.moveTo(sx1, sy1);
+          ctx.lineTo(midSx - ux * gapStart, midSy - uy * gapStart);
+          ctx.stroke();
+          
+          // Draw second segment (gap to end)
+          ctx.beginPath();
+          ctx.moveTo(midSx + ux * gapStart, midSy + uy * gapStart);
+          ctx.lineTo(sx2, sy2);
+          ctx.stroke();
+          
+          // Draw label in the gap
+          ctx.save();
+          ctx.translate(midSx, midSy);
+          
+          // Calculate rotation angle
+          let angle = Math.atan2(sy2 - sy1, sx2 - sx1);
+          // Keep text readable (not upside down)
+          if (angle > Math.PI / 2) angle -= Math.PI;
+          if (angle < -Math.PI / 2) angle += Math.PI;
+          
+          ctx.rotate(angle);
+          
+          // Draw background pill
+          const pillHeight = 14;
+          const pillRadius = pillHeight / 2;
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.roundRect(-gapWidth / 2, -pillHeight / 2, gapWidth, pillHeight, pillRadius);
+          ctx.fill();
+          
+          // Draw border
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(-gapWidth / 2, -pillHeight / 2, gapWidth, pillHeight, pillRadius);
+          ctx.stroke();
+          
+          // Draw text
+          ctx.font = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+          ctx.fillStyle = strokeColor;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, 0, 0);
+          
+          ctx.restore();
+        } else {
+          // Line too short for gap, just draw it straight
+          ctx.beginPath();
+          ctx.moveTo(sx1, sy1);
+          ctx.lineTo(sx2, sy2);
+          ctx.stroke();
+        }
+
+        // endpoints with possible misalignment highlight
+        const r = isSelected ? 4 : 3;
+
+        function drawEndpoint(x, y) {
+          const key = jointKeyFromWorld(x, y);
+          const issue = jointIssues.get(key);
+
+          const sx = worldToScreenX(x);
+          const sy = worldToScreenY(y);
+
+          ctx.beginPath();
+          ctx.arc(sx, sy, r, 0, Math.PI * 2);
+          if (issue) {
+            ctx.fillStyle = isSelected ? "#ff4136" : strokeColor;
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#ff4136";
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = isSelected ? "#ff4136" : strokeColor;
+            ctx.fill();
+          }
+        }
+
+        drawEndpoint(l.x1, l.y1);
+        drawEndpoint(l.x2, l.y2);
+
+        // Draw dimension brackets for windows and doors
+        if ((kind === "window" || kind === "door") && len > 0) {
+          drawWindowDimensions(l, kind);
+        }
+      }
+
+      function drawWindowDimensions(windowLine, kind) {
+        // Find the nearest wall endpoints (corners) to each end of the window
+        const windowPts = [
+          { x: windowLine.x1, y: windowLine.y1, which: "start" },
+          { x: windowLine.x2, y: windowLine.y2, which: "end" }
+        ];
+        
+        // Get window direction
+        const wdx = windowLine.x2 - windowLine.x1;
+        const wdy = windowLine.y2 - windowLine.y1;
+        const wlen = Math.sqrt(wdx * wdx + wdy * wdy);
+        if (wlen === 0) return;
+        
+        // Normal to window (perpendicular)
+        let wnx = -wdy / wlen;
+        let wny = wdx / wlen;
+        
+        // Direction along window
+        const wux = wdx / wlen;
+        const wuy = wdy / wlen;
+        
+        // Determine which side is the room interior by checking for more walls
+        // Cast rays in both normal directions and count wall intersections
+        const midX = (windowLine.x1 + windowLine.x2) / 2;
+        const midY = (windowLine.y1 + windowLine.y2) / 2;
+        
+        let hitsPositive = 0;
+        let hitsNegative = 0;
+        const rayLength = 10000;
+        
+        for (const wall of lines) {
+          if (lineKind(wall) !== "wall") continue;
+          
+          // Check intersection with ray in positive normal direction
+          if (rayIntersectsSegment(midX, midY, midX + wnx * rayLength, midY + wny * rayLength,
+                                    wall.x1, wall.y1, wall.x2, wall.y2)) {
+            hitsPositive++;
+          }
+          
+          // Check intersection with ray in negative normal direction
+          if (rayIntersectsSegment(midX, midY, midX - wnx * rayLength, midY - wny * rayLength,
+                                    wall.x1, wall.y1, wall.x2, wall.y2)) {
+            hitsNegative++;
+          }
+        }
+        
+        // Odd number of hits means inside the room - we want to display on the exterior
+        // So flip the normal to point away from the interior (towards side with even hits)
+        const positiveIsInterior = (hitsPositive % 2) === 1;
+        const negativeIsInterior = (hitsNegative % 2) === 1;
+        
+        // Prefer exterior side (even number of intersections = outside)
+        if (positiveIsInterior && !negativeIsInterior) {
+          // Positive side is interior, flip to negative
+          wnx = -wnx;
+          wny = -wny;
+        }
+        // If negative is interior and positive is exterior, keep as is
+        // If both or neither, just keep the default
+        
+        // Find the parent wall using the same logic as getWallOffsetsForElement
+        let parentWall = null;
+        let bestDist = Infinity;
+        
+        for (const wall of lines) {
+          if (lineKind(wall) !== "wall") continue;
+          
+          const pwdx = wall.x2 - wall.x1;
+          const pwdy = wall.y2 - wall.y1;
+          const pwlen = Math.sqrt(pwdx * pwdx + pwdy * pwdy);
+          if (pwlen === 0) continue;
+          
+          // Check if element midpoint is close to this wall
+          const t = ((midX - wall.x1) * pwdx + (midY - wall.y1) * pwdy) / (pwdx * pwdx + pwdy * pwdy);
+          
+          // Point on wall closest to element midpoint
+          const closestX = wall.x1 + t * pwdx;
+          const closestY = wall.y1 + t * pwdy;
+          const dist = Math.sqrt((midX - closestX) ** 2 + (midY - closestY) ** 2);
+          
+          // Check if element is roughly parallel to wall
+          const dotProduct = Math.abs(wux * (pwdx / pwlen) + wuy * (pwdy / pwlen));
+          
+          if (dist < 10 && dotProduct > 0.9 && dist < bestDist) {
+            bestDist = dist;
+            parentWall = wall;
+          }
+        }
+        
+        if (!parentWall) return;
+        
+        // Calculate distances along the parent wall
+        const pwdx = parentWall.x2 - parentWall.x1;
+        const pwdy = parentWall.y2 - parentWall.y1;
+        const pwlen = Math.sqrt(pwdx * pwdx + pwdy * pwdy);
+        const pwux = pwdx / pwlen;
+        const pwuy = pwdy / pwlen;
+        
+        // Project element endpoints onto wall direction
+        const t1 = ((windowLine.x1 - parentWall.x1) * pwux + (windowLine.y1 - parentWall.y1) * pwuy);
+        const t2 = ((windowLine.x2 - parentWall.x1) * pwux + (windowLine.y2 - parentWall.y1) * pwuy);
+        
+        const elemStartOnWall = Math.min(t1, t2);
+        const elemEndOnWall = Math.max(t1, t2);
+        
+        const distFromStart = Math.max(0, elemStartOnWall);
+        const distFromEnd = Math.max(0, pwlen - elemEndOnWall);
+        
+        ctx.save();
+        // Use appropriate color based on element type
+        const dimColor = kind === "door" ? "#aa5500" : "#0074d9";
+        ctx.strokeStyle = dimColor;
+        ctx.fillStyle = dimColor;
+        ctx.lineWidth = 1;
+        ctx.font = "10px system-ui, -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        
+        const bracketOffset = 12;
+        
+        // Draw bracket from wall start to element start
+        if (distFromStart > 1) {
+          const startX = parentWall.x1;
+          const startY = parentWall.y1;
+          const elemStartX = parentWall.x1 + pwux * elemStartOnWall;
+          const elemStartY = parentWall.y1 + pwuy * elemStartOnWall;
+          drawDimensionLine(
+            startX, startY,
+            elemStartX, elemStartY,
+            wnx, wny, bracketOffset, distFromStart
+          );
+        }
+        
+        // Draw bracket from element end to wall end
+        if (distFromEnd > 1) {
+          const elemEndX = parentWall.x1 + pwux * elemEndOnWall;
+          const elemEndY = parentWall.y1 + pwuy * elemEndOnWall;
+          const endX = parentWall.x2;
+          const endY = parentWall.y2;
+          drawDimensionLine(
+            elemEndX, elemEndY,
+            endX, endY,
+            wnx, wny, bracketOffset, distFromEnd
+          );
+        }
+        
+        ctx.restore();
+      }
+
+      function rayIntersectsSegment(rx1, ry1, rx2, ry2, sx1, sy1, sx2, sy2) {
+        // Check if ray from (rx1,ry1) to (rx2,ry2) intersects segment (sx1,sy1)-(sx2,sy2)
+        const dx = rx2 - rx1;
+        const dy = ry2 - ry1;
+        const dsx = sx2 - sx1;
+        const dsy = sy2 - sy1;
+        
+        const denom = dx * dsy - dy * dsx;
+        if (Math.abs(denom) < 1e-10) return false;
+        
+        const t = ((sx1 - rx1) * dsy - (sy1 - ry1) * dsx) / denom;
+        const u = ((sx1 - rx1) * dy - (sy1 - ry1) * dx) / denom;
+        
+        return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+      }
+
+      function drawDimensionLine(x1, y1, x2, y2, nx, ny, offset, distance) {
+        // Screen coordinates
+        const sx1 = worldToScreenX(x1);
+        const sy1 = worldToScreenY(y1);
+        const sx2 = worldToScreenX(x2);
+        const sy2 = worldToScreenY(y2);
+        
+        // Offset positions (above the line)
+        const screenOffset = offset;
+        const ox1 = sx1 + nx * screenOffset;
+        const oy1 = sy1 + ny * screenOffset;
+        const ox2 = sx2 + nx * screenOffset;
+        const oy2 = sy2 + ny * screenOffset;
+        
+        // Draw vertical tick at start
+        ctx.beginPath();
+        ctx.moveTo(sx1, sy1);
+        ctx.lineTo(ox1, oy1);
+        ctx.stroke();
+        
+        // Draw vertical tick at end
+        ctx.beginPath();
+        ctx.moveTo(sx2, sy2);
+        ctx.lineTo(ox2, oy2);
+        ctx.stroke();
+        
+        // Draw dotted horizontal line
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(ox1, oy1);
+        ctx.lineTo(ox2, oy2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw dimension text above the line
+        const midX = (ox1 + ox2) / 2;
+        const midY = (oy1 + oy2) / 2;
+        const textOffset = 4;
+        ctx.fillText(
+          formatInchesToFeetInches(distance, 1),
+          midX + nx * textOffset,
+          midY + ny * textOffset
+        );
+      }
+
+      // In-progress drawing
+      if (isDrawing && currentDrawing) {
+        const l = currentDrawing;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#ff4136";
+        ctx.beginPath();
+        ctx.moveTo(worldToScreenX(l.x1), worldToScreenY(l.y1));
+        ctx.lineTo(worldToScreenX(l.x2), worldToScreenY(l.y2));
+        ctx.stroke();
+
+        ctx.fillStyle = "#ff4136";
+        ctx.beginPath();
+        ctx.arc(worldToScreenX(l.x1), worldToScreenY(l.y1), 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(worldToScreenX(l.x2), worldToScreenY(l.y2), 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Inline length input display
+      if (isTypingLength && selectedLineId != null) {
+        const line = getSelectedLine();
+        if (line) {
+          const sx1 = worldToScreenX(line.x1);
+          const sy1 = worldToScreenY(line.y1);
+          const sx2 = worldToScreenX(line.x2);
+          const sy2 = worldToScreenY(line.y2);
+          const midSx = (sx1 + sx2) / 2;
+          const midSy = (sy1 + sy2) / 2;
+          
+          ctx.save();
+          
+          // Draw input box
+          const displayText = inlineLengthInput + "▏";
+          ctx.font = "bold 14px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+          const textWidth = ctx.measureText(displayText).width;
+          const boxWidth = Math.max(textWidth + 20, 80);
+          const boxHeight = 24;
+          
+          // Background
+          ctx.fillStyle = "#fff";
+          ctx.strokeStyle = "#ff4136";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(midSx - boxWidth / 2, midSy - boxHeight / 2 - 20, boxWidth, boxHeight, 4);
+          ctx.fill();
+          ctx.stroke();
+          
+          // Text
+          ctx.fillStyle = "#333";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(displayText, midSx, midSy - 20);
+          
+          // Hint text
+          ctx.font = "11px system-ui, -apple-system, sans-serif";
+          ctx.fillStyle = "#888";
+          ctx.fillText("Enter to apply, Esc to cancel", midSx, midSy + 10);
+          
+          ctx.restore();
+        }
+      }
+
+      // Zoomed misalignment diagram
+      if (hoverJoint) {
+        const boxSize = 150;
+        const padding = 10;
+        const boxX = w - boxSize - padding;
+        const boxY = padding;
+
+        ctx.save();
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
+        ctx.strokeStyle = "#999";
+        ctx.lineWidth = 1;
+        ctx.fillRect(boxX, boxY, boxSize, boxSize);
+        ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+
+        ctx.translate(boxX + boxSize / 2, boxY + boxSize / 2);
+
+        const r = 40;
+        ctx.strokeStyle = "#ff4136";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // ideal horizontal
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(r, 0);
+        ctx.stroke();
+
+        // misaligned vertical-ish
+        const errorRad = (hoverJoint.errorDeg * Math.PI) / 180;
+        const baseAngle = Math.PI / 2; // 90deg
+        const actualAngle = baseAngle + errorRad;
+        ctx.strokeStyle = "#ff4136";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(r * Math.cos(actualAngle), r * Math.sin(actualAngle));
+        ctx.stroke();
+
+        ctx.fillStyle = "#333";
+        ctx.font = "10px system-ui, -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const offText =
+          '≈ ' + hoverJoint.offInches.toFixed(2) + '" off at 1 ft';
+        const angleText = "angle error " + hoverJoint.errorDeg.toFixed(2) + "°";
+        ctx.fillText(offText, 0, r + 6);
+        ctx.fillText(angleText, 0, r + 18);
+
+        ctx.restore();
+      }
+    }
+
+    function updateSelectionPanel() {
+      const line = getSelectedLine();
+      if (!line) {
+        selectedTypeDisplay.textContent = "—";
+        lengthDisplay.textContent = "—";
+        lengthInchesDisplay.textContent = "—";
+        angleDisplay.textContent = "—";
+        selectedHeightDisplay.textContent = "—";
+        selectedOffsetDisplay.textContent = "—";
+        if (lengthInput) lengthInput.value = "";
+        if (angleInput) angleInput.value = "";
+        if (heightInput) heightInput.value = "";
+        if (offsetInput) offsetInput.value = "";
+        // Hide wall offset fields
+        wallOffsetStartLine.style.display = "none";
+        wallOffsetEndLine.style.display = "none";
+        wallOffsetStartField.style.display = "none";
+        wallOffsetEndField.style.display = "none";
+        wallOffsetStartBtnField.style.display = "none";
+        wallOffsetEndBtnField.style.display = "none";
+        return;
+      }
+
+      const kind = lineKind(line);
+      const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1);
+      selectedTypeDisplay.textContent = kindLabel;
+
+      const dx = line.x2 - line.x1;
+      const dy = line.y2 - line.y1;
+      const lenInches = Math.sqrt(dx * dx + dy * dy);
+      const angleRad = Math.atan2(dy, dx);
+      const angleDeg = (angleRad * 180) / Math.PI;
+
+      lengthDisplay.textContent = formatInchesToFeetInches(lenInches, 2);
+      lengthInchesDisplay.textContent = lenInches.toFixed(2) + '"';
+      angleDisplay.textContent = angleDeg.toFixed(1) + "°";
+
+      if (lengthInput) {
+        lengthInput.value = formatInchesToFeetInches(lenInches, 2);
+      }
+      if (angleInput) {
+        angleInput.value = angleDeg.toFixed(1);
+      }
+
+      if (kind === "door" || kind === "window") {
+        const h = line.heightInches;
+        if (h != null && isFinite(h)) {
+          selectedHeightDisplay.textContent = formatInchesToFeetInches(h, 2);
+          if (heightInput) {
+            heightInput.value = formatInchesToFeetInches(h, 2);
+          }
+        } else {
+          selectedHeightDisplay.textContent = "—";
+          if (heightInput) heightInput.value = "";
+        }
+
+        const offset = line.baseOffsetInches != null ? line.baseOffsetInches : 0;
+        selectedOffsetDisplay.textContent = formatInchesToFeetInches(offset, 2);
+        if (offsetInput) {
+          offsetInput.value = formatInchesToFeetInches(offset, 2);
+        }
+
+        // Calculate wall offsets for doors/windows
+        const wallOffsets = getWallOffsetsForElement(line);
+        if (wallOffsets) {
+          wallOffsetStartLine.style.display = "flex";
+          wallOffsetEndLine.style.display = "flex";
+          wallOffsetStartField.style.display = "flex";
+          wallOffsetEndField.style.display = "flex";
+          wallOffsetStartBtnField.style.display = "flex";
+          wallOffsetEndBtnField.style.display = "flex";
+          
+          wallOffsetStartDisplay.textContent = formatInchesToFeetInches(wallOffsets.fromStart, 2);
+          wallOffsetEndDisplay.textContent = formatInchesToFeetInches(wallOffsets.fromEnd, 2);
+          wallOffsetStartInput.value = formatInchesToFeetInches(wallOffsets.fromStart, 2);
+          wallOffsetEndInput.value = formatInchesToFeetInches(wallOffsets.fromEnd, 2);
+        } else {
+          wallOffsetStartLine.style.display = "none";
+          wallOffsetEndLine.style.display = "none";
+          wallOffsetStartField.style.display = "none";
+          wallOffsetEndField.style.display = "none";
+          wallOffsetStartBtnField.style.display = "none";
+          wallOffsetEndBtnField.style.display = "none";
+        }
+      } else {
+        selectedHeightDisplay.textContent = "—";
+        selectedOffsetDisplay.textContent = "—";
+        if (heightInput) heightInput.value = "";
+        if (offsetInput) offsetInput.value = "";
+        // Hide wall offset fields for walls
+        wallOffsetStartLine.style.display = "none";
+        wallOffsetEndLine.style.display = "none";
+        wallOffsetStartField.style.display = "none";
+        wallOffsetEndField.style.display = "none";
+        wallOffsetStartBtnField.style.display = "none";
+        wallOffsetEndBtnField.style.display = "none";
+      }
+    }
+
+    function getWallOffsetsForElement(element) {
+      // Find the parent wall this element is on
+      const elemDx = element.x2 - element.x1;
+      const elemDy = element.y2 - element.y1;
+      const elemLen = Math.sqrt(elemDx * elemDx + elemDy * elemDy);
+      if (elemLen === 0) return null;
+      
+      const elemUx = elemDx / elemLen;
+      const elemUy = elemDy / elemLen;
+      const elemMidX = (element.x1 + element.x2) / 2;
+      const elemMidY = (element.y1 + element.y2) / 2;
+      
+      // Find the wall that this element is on
+      let parentWall = null;
+      let bestDist = Infinity;
+      
+      for (const wall of lines) {
+        if (lineKind(wall) !== "wall") continue;
+        
+        const wdx = wall.x2 - wall.x1;
+        const wdy = wall.y2 - wall.y1;
+        const wlen = Math.sqrt(wdx * wdx + wdy * wdy);
+        if (wlen === 0) continue;
+        
+        // Check if element midpoint is close to this wall
+        const t = ((elemMidX - wall.x1) * wdx + (elemMidY - wall.y1) * wdy) / (wdx * wdx + wdy * wdy);
+        
+        // Point on wall closest to element midpoint
+        const closestX = wall.x1 + t * wdx;
+        const closestY = wall.y1 + t * wdy;
+        const dist = Math.sqrt((elemMidX - closestX) ** 2 + (elemMidY - closestY) ** 2);
+        
+        // Check if element is roughly parallel to wall
+        const dotProduct = Math.abs(elemUx * (wdx / wlen) + elemUy * (wdy / wlen));
+        
+        if (dist < 10 && dotProduct > 0.9 && dist < bestDist) {
+          bestDist = dist;
+          parentWall = wall;
+        }
+      }
+      
+      if (!parentWall) return null;
+      
+      // Calculate distances along the parent wall
+      const wdx = parentWall.x2 - parentWall.x1;
+      const wdy = parentWall.y2 - parentWall.y1;
+      const wlen = Math.sqrt(wdx * wdx + wdy * wdy);
+      const wux = wdx / wlen;
+      const wuy = wdy / wlen;
+      
+      // Project element endpoints onto wall direction
+      const t1 = ((element.x1 - parentWall.x1) * wux + (element.y1 - parentWall.y1) * wuy);
+      const t2 = ((element.x2 - parentWall.x1) * wux + (element.y2 - parentWall.y1) * wuy);
+      
+      const elemStartOnWall = Math.min(t1, t2);
+      const elemEndOnWall = Math.max(t1, t2);
+      
+      const fromStart = Math.max(0, elemStartOnWall);
+      const fromEnd = Math.max(0, wlen - elemEndOnWall);
+      
+      return {
+        fromStart: fromStart,
+        fromEnd: fromEnd,
+        parentWall: parentWall,
+        wallLength: wlen
+      };
+    }
+
+    function applyWallOffsetStart() {
+      const line = getSelectedLine();
+      if (!line) return;
+      const kind = lineKind(line);
+      if (kind !== "door" && kind !== "window") return;
+      
+      const newOffset = parseLengthToInches(wallOffsetStartInput.value);
+      if (newOffset == null || !isFinite(newOffset) || newOffset < 0) {
+        alert("Couldn't understand that offset.\n\nTry examples like:\n  2'\n  24\"");
+        return;
+      }
+      
+      const currentOffsets = getWallOffsetsForElement(line);
+      if (!currentOffsets || !currentOffsets.parentWall) {
+        alert("Could not find the parent wall for this element.");
+        return;
+      }
+      
+      const currentFromStart = currentOffsets.fromStart;
+      const delta = newOffset - currentFromStart;
+      
+      // Use the parent wall's direction for movement
+      const wall = currentOffsets.parentWall;
+      const wdx = wall.x2 - wall.x1;
+      const wdy = wall.y2 - wall.y1;
+      const wlen = Math.sqrt(wdx * wdx + wdy * wdy);
+      const wux = wdx / wlen;
+      const wuy = wdy / wlen;
+      
+      saveState();
+      
+      // Move element along wall direction
+      line.x1 += wux * delta;
+      line.y1 += wuy * delta;
+      line.x2 += wux * delta;
+      line.y2 += wuy * delta;
+      
+      updateSelectionPanel();
+      draw();
+    }
+
+    function applyWallOffsetEnd() {
+      const line = getSelectedLine();
+      if (!line) return;
+      const kind = lineKind(line);
+      if (kind !== "door" && kind !== "window") return;
+      
+      const newOffset = parseLengthToInches(wallOffsetEndInput.value);
+      if (newOffset == null || !isFinite(newOffset) || newOffset < 0) {
+        alert("Couldn't understand that offset.\n\nTry examples like:\n  2'\n  24\"");
+        return;
+      }
+      
+      const currentOffsets = getWallOffsetsForElement(line);
+      if (!currentOffsets || !currentOffsets.parentWall) {
+        alert("Could not find the parent wall for this element.");
+        return;
+      }
+      
+      const currentFromEnd = currentOffsets.fromEnd;
+      const delta = newOffset - currentFromEnd;
+      
+      // Use the parent wall's direction for movement
+      const wall = currentOffsets.parentWall;
+      const wdx = wall.x2 - wall.x1;
+      const wdy = wall.y2 - wall.y1;
+      const wlen = Math.sqrt(wdx * wdx + wdy * wdy);
+      const wux = wdx / wlen;
+      const wuy = wdy / wlen;
+      
+      saveState();
+      
+      // Move element opposite to wall direction (towards start)
+      line.x1 -= wux * delta;
+      line.y1 -= wuy * delta;
+      line.x2 -= wux * delta;
+      line.y2 -= wuy * delta;
+      
+      updateSelectionPanel();
+      draw();
+    }
+
+    // === Editing: length / angle / height / offset ===================
+
+    function applyNewLength() {
+      const line = getSelectedLine();
+      if (!line) return;
+
+      const inches = parseLengthToInches(lengthInput.value);
+      if (inches == null || !isFinite(inches) || inches <= 0) {
+        alert(
+          "Couldn't understand that length.\n\nTry examples like:\n  10'\n  120\"\n  10' 6\"\n  100.5"
+        );
+        return;
+      }
+
+      saveState();
+      const dx = line.x2 - line.x1;
+      const dy = line.y2 - line.y1;
+      const currentLen = Math.sqrt(dx * dx + dy * dy);
+      if (currentLen === 0) return;
+
+      const scale = inches / currentLen;
+      line.x2 = line.x1 + dx * scale;
+      line.y2 = line.y1 + dy * scale;
+
+      updateSelectionPanel();
+      draw();
+    }
+
+    function applyNewAngle() {
+      const line = getSelectedLine();
+      if (!line) return;
+
+      const deg = parseFloat(angleInput.value);
+      if (!isFinite(deg)) {
+        alert("Enter a valid angle in degrees (e.g. 0, 90, 180).");
+        return;
+      }
+
+      saveState();
+      const dx = line.x2 - line.x1;
+      const dy = line.y2 - line.y1;
+      let len = Math.sqrt(dx * dx + dy * dy);
+      if (len === 0) len = 12;
+
+      const rad = (deg * Math.PI) / 180;
+      const ndx = Math.cos(rad) * len;
+      const ndy = Math.sin(rad) * len;
+
+      line.x2 = line.x1 + ndx;
+      line.y2 = line.y1 + ndy;
+
+      updateSelectionPanel();
+      draw();
+    }
+
+    function applyNewHeight() {
+      const line = getSelectedLine();
+      if (!line) return;
+      const kind = lineKind(line);
+      if (kind !== "door" && kind !== "window") return;
+
+      const inches = parseLengthToInches(heightInput.value);
+      if (inches == null || !isFinite(inches) || inches <= 0) {
+        alert(
+          "Couldn't understand that height.\n\nTry examples like:\n  80\"\n  6' 8\"\n  7'"
+        );
+        return;
+      }
+      saveState();
+      line.heightInches = inches;
+      updateSelectionPanel();
+      draw();
+    }
+
+    function applyNewOffset() {
+      const line = getSelectedLine();
+      if (!line) return;
+      const kind = lineKind(line);
+      if (kind !== "door" && kind !== "window") return;
+
+      const inches = parseLengthToInches(offsetInput.value);
+      if (inches == null || !isFinite(inches) || inches < 0) {
+        alert(
+          "Couldn't understand that bottom offset.\n\nTry examples like:\n  0\"\n  3'\n  2\""
+        );
+        return;
+      }
+      saveState();
+      line.baseOffsetInches = inches;
+      updateSelectionPanel();
+      draw();
+    }
+
+    applyLengthBtn.addEventListener("click", applyNewLength);
+    lengthInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyNewLength();
+    });
+
+    applyAngleBtn.addEventListener("click", applyNewAngle);
+    angleInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyNewAngle();
+    });
+
+    applyHeightBtn.addEventListener("click", applyNewHeight);
+    heightInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyNewHeight();
+    });
+
+    applyOffsetBtn.addEventListener("click", applyNewOffset);
+    offsetInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyNewOffset();
+    });
+
+    applyWallOffsetStartBtn.addEventListener("click", applyWallOffsetStart);
+    wallOffsetStartInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyWallOffsetStart();
+    });
+
+    applyWallOffsetEndBtn.addEventListener("click", applyWallOffsetEnd);
+    wallOffsetEndInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyWallOffsetEnd();
+    });
+
+    if (showWallsCheckbox) {
+      showWallsCheckbox.addEventListener("change", draw);
+    }
+    if (wallThicknessInput) {
+      wallThicknessInput.addEventListener("input", draw);
+    }
+
+    // === Export / Import =============================================
+
+    function exportToJson() {
+      const simpleLines = lines.map((l) => {
+        const obj = {
+          x1: +l.x1,
+          y1: +l.y1,
+          x2: +l.x2,
+          y2: +l.y2,
+          kind: lineKind(l),
+        };
+        if (l.heightInches != null && isFinite(l.heightInches)) {
+          obj.heightInches = +l.heightInches;
+        }
+        if (l.baseOffsetInches != null && isFinite(l.baseOffsetInches)) {
+          obj.baseOffsetInches = +l.baseOffsetInches;
+        }
+        return obj;
+      });
+      const obj = { lines: simpleLines };
+      jsonArea.value = JSON.stringify(obj, null, 2);
+    }
+
+    function importFromJson() {
+      const text = jsonArea.value;
+      if (!text || !text.trim()) {
+        alert("JSON area is empty.");
+        return;
+      }
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        alert("Invalid JSON: " + e.message);
+        return;
+      }
+
+      let arr;
+      if (Array.isArray(data)) {
+        arr = data;
+      } else if (data && Array.isArray(data.lines)) {
+        arr = data.lines;
+      } else {
+        alert('JSON must be an array of lines or { "lines": [...] }');
+        return;
+      }
+
+      const newLines = [];
+      let idCounter = 1;
+      for (const item of arr) {
+        if (typeof item !== "object" || item == null) continue;
+        const x1 = Number(item.x1);
+        const y1 = Number(item.y1);
+        const x2 = Number(item.x2);
+        const y2 = Number(item.y2);
+        if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2))
+          continue;
+        const kindRaw =
+          typeof item.kind === "string" ? item.kind.toLowerCase() : "wall";
+        const kind =
+          kindRaw === "door" || kindRaw === "window" ? kindRaw : "wall";
+        const heightInches =
+          item.heightInches != null && isFinite(Number(item.heightInches))
+            ? Number(item.heightInches)
+            : null;
+        const baseOffsetInches =
+          item.baseOffsetInches != null &&
+          isFinite(Number(item.baseOffsetInches))
+            ? Number(item.baseOffsetInches)
+            : null;
+
+        newLines.push({
+          id: idCounter++,
+          kind,
+          heightInches,
+          baseOffsetInches,
+          x1,
+          y1,
+          x2,
+          y2,
+        });
+      }
+
+      lines = newLines;
+      nextLineId = newLines.length + 1;
+      selectedLineId = null;
+      viewOffsetX = 0;
+      viewOffsetY = 0;
+      viewScale = 1;
+      updateSelectionPanel();
+      draw();
+    }
+
+    exportJsonBtn.addEventListener("click", exportToJson);
+    importJsonBtn.addEventListener("click", importFromJson);
+
+    // === Mode & element type =========================================
+
+    modeRadios.forEach((r) => {
+      r.addEventListener("change", () => {
+        mode = r.value;
+        canvas.style.cursor = mode === "draw" ? "crosshair" : "default";
+      });
+    });
+
+    elementTypeRadios.forEach((r) => {
+      r.addEventListener("change", () => {
+        elementType = r.value;
+      });
+    });
+
+    // === Mouse & wheel ===============================================
+
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    canvas.addEventListener("mousedown", (evt) => {
+      const { sx, sy } = getMousePos(evt);
+      const worldPt = screenToWorld(sx, sy);
+
+      // Right click => pan
+      if (evt.button === 2) {
+        isPanning = true;
+        panStartScreenX = sx;
+        panStartScreenY = sy;
+        panStartOffsetX = viewOffsetX;
+        panStartOffsetY = viewOffsetY;
+        return;
+      }
+
+      // Left click
+      if (evt.button === 0 && mode === "select") {
+        const endpointHit = findEndpointAtScreen(sx, sy, 8);
+        if (endpointHit) {
+          saveState();
+          dragStateSaved = true;
+          draggingEndpoint = {
+            lineId: endpointHit.line.id,
+            which: endpointHit.which,
+          };
+          selectLine(endpointHit.line);
+          return;
+        }
+
+        const line = findLineAtPoint(worldPt, 6);
+        if (line) {
+          selectLine(line);
+          return;
+        } else {
+          selectLine(null);
+          return;
+        }
+      }
+
+      if (evt.button === 0 && mode === "draw") {
+        isDrawing = true;
+
+        let heightInches = null;
+        let baseOffsetInches = null;
+
+        if (elementType === "door") {
+          heightInches = parseLengthToInches(doorHeightInput.value);
+          if (!heightInches || !isFinite(heightInches) || heightInches <= 0) {
+            heightInches = 80; // default
+          }
+          baseOffsetInches = parseLengthToInches(doorBaseOffsetInput.value);
+          if (
+            baseOffsetInches == null ||
+            !isFinite(baseOffsetInches) ||
+            baseOffsetInches < 0
+          ) {
+            baseOffsetInches = 0;
+          }
+        } else if (elementType === "window") {
+          heightInches = parseLengthToInches(windowHeightInput.value);
+          if (!heightInches || !isFinite(heightInches) || heightInches <= 0) {
+            heightInches = 48;
+          }
+          baseOffsetInches = parseLengthToInches(windowBaseOffsetInput.value);
+          if (
+            baseOffsetInches == null ||
+            !isFinite(baseOffsetInches) ||
+            baseOffsetInches < 0
+          ) {
+            baseOffsetInches = 36;
+          }
+        }
+
+        const snappedStart = snapPoint(worldPt, null);
+        currentDrawing = {
+          kind: elementType,
+          heightInches,
+          baseOffsetInches,
+          x1: snappedStart.x,
+          y1: snappedStart.y,
+          x2: snappedStart.x,
+          y2: snappedStart.y,
+        };
+      }
+    });
+
+    canvas.addEventListener("mousemove", (evt) => {
+      const { sx, sy } = getMousePos(evt);
+      const worldPt = screenToWorld(sx, sy);
+
+      if (isPanning) {
+        const dxScreen = sx - panStartScreenX;
+        const dyScreen = sy - panStartScreenY;
+        viewOffsetX = panStartOffsetX - dxScreen / viewScale;
+        viewOffsetY = panStartOffsetY - dyScreen / viewScale;
+        draw();
+        return;
+      }
+
+      if (mode === "draw" && isDrawing && currentDrawing) {
+        const snappedEnd = snapPoint(worldPt, {
+          x: currentDrawing.x1,
+          y: currentDrawing.y1,
+        });
+        currentDrawing.x2 = snappedEnd.x;
+        currentDrawing.y2 = snappedEnd.y;
+        draw();
+        return;
+      }
+
+      if (mode === "select" && draggingEndpoint) {
+        const line = lines.find((l) => l.id === draggingEndpoint.lineId);
+        if (!line) {
+          draggingEndpoint = null;
+          return;
+        }
+        const anchor =
+          draggingEndpoint.which === "start"
+            ? { x: line.x2, y: line.y2 }
+            : { x: line.x1, y: line.y1 };
+        const snapped = snapPoint(worldPt, anchor);
+        if (draggingEndpoint.which === "start") {
+          line.x1 = snapped.x;
+          line.y1 = snapped.y;
+        } else {
+          line.x2 = snapped.x;
+          line.y2 = snapped.y;
+        }
+        updateSelectionPanel();
+        draw();
+        return;
+      }
+
+      // Idle hover => misalignment diagram
+      updateHoverJoint(sx, sy);
+      draw();
+    });
+
+    canvas.addEventListener("mouseup", () => {
+      if (isPanning) {
+        isPanning = false;
+        return;
+      }
+
+      if (mode === "draw") {
+        if (isDrawing && currentDrawing) {
+          const dx = currentDrawing.x2 - currentDrawing.x1;
+          const dy = currentDrawing.y2 - currentDrawing.y1;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len > 2) {
+            saveState();
+            const newLine = {
+              id: nextLineId++,
+              kind: currentDrawing.kind || "wall",
+              heightInches: currentDrawing.heightInches,
+              baseOffsetInches: currentDrawing.baseOffsetInches,
+              x1: currentDrawing.x1,
+              y1: currentDrawing.y1,
+              x2: currentDrawing.x2,
+              y2: currentDrawing.y2,
+            };
+            lines.push(newLine);
+            selectLine(newLine);
+          }
+        }
+        isDrawing = false;
+        currentDrawing = null;
+        draw();
+      }
+
+      if (mode === "select" && draggingEndpoint) {
+        draggingEndpoint = null;
+        dragStateSaved = false;
+      }
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      isDrawing = false;
+      currentDrawing = null;
+      isPanning = false;
+      draggingEndpoint = null;
+      dragStateSaved = false;
+      hoverJoint = null;
+      draw();
+    });
+
+    canvas.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const { sx, sy } = getMousePos(e);
+        const worldBefore = screenToWorld(sx, sy);
+
+        const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        const newScale = Math.min(4, Math.max(0.25, viewScale * zoomFactor));
+        viewScale = newScale;
+
+        viewOffsetX = worldBefore.x - sx / viewScale;
+        viewOffsetY = worldBefore.y - sy / viewScale;
+
+        draw();
+      },
+      { passive: false }
+    );
+
+    // Delete selected line
+    document.addEventListener("keydown", (e) => {
+      const target = e.target;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        // Allow Ctrl+Z even in inputs
+        if (!(e.ctrlKey && e.key === "z")) {
+          return;
+        }
+      }
+
+      // Undo with Ctrl+Z
+      if (e.ctrlKey && e.key === "z") {
+        e.preventDefault();
+        undo();
+        isTypingLength = false;
+        inlineLengthInput = "";
+        draw();
+        return;
+      }
+
+      // Handle inline length typing when a line is selected
+      if (selectedLineId != null) {
+        // Check if it's a valid length input character
+        const validChars = "0123456789.'\" ";
+        
+        if (e.key === "Enter" && isTypingLength && inlineLengthInput.trim()) {
+          // Apply the typed length
+          e.preventDefault();
+          const inches = parseLengthToInches(inlineLengthInput);
+          if (inches != null && isFinite(inches) && inches > 0) {
+            const line = getSelectedLine();
+            if (line) {
+              saveState();
+              const dx = line.x2 - line.x1;
+              const dy = line.y2 - line.y1;
+              const currentLen = Math.sqrt(dx * dx + dy * dy);
+              if (currentLen > 0) {
+                const scale = inches / currentLen;
+                line.x2 = line.x1 + dx * scale;
+                line.y2 = line.y1 + dy * scale;
+                updateSelectionPanel();
+              }
+            }
+          }
+          isTypingLength = false;
+          inlineLengthInput = "";
+          draw();
+          return;
+        }
+        
+        if (e.key === "Escape") {
+          // Cancel typing
+          isTypingLength = false;
+          inlineLengthInput = "";
+          draw();
+          e.preventDefault();
+          return;
+        }
+        
+        if (e.key === "Backspace" && isTypingLength) {
+          // Delete last character
+          inlineLengthInput = inlineLengthInput.slice(0, -1);
+          if (inlineLengthInput === "") {
+            isTypingLength = false;
+          }
+          draw();
+          e.preventDefault();
+          return;
+        }
+        
+        if (validChars.includes(e.key) && e.key.length === 1) {
+          // Start or continue typing
+          isTypingLength = true;
+          inlineLengthInput += e.key;
+          draw();
+          e.preventDefault();
+          return;
+        }
+      }
+
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selectedLineId != null &&
+        !isTypingLength
+      ) {
+        saveState();
+        lines = lines.filter((l) => l.id !== selectedLineId);
+        selectedLineId = null;
+        updateSelectionPanel();
+        draw();
+        e.preventDefault();
+      }
+    });
+
+    // === 3D Scene with Three.js ======================================
+
+    function generate3DScene() {
+      threeContainer.style.display = "block";
+      threeContainer.innerHTML = "";
+      threeContainer.appendChild(threeCloseBtn);
+
+      if (typeof THREE === "undefined") {
+        const msg = document.createElement("div");
+        msg.className = "three-message";
+        msg.textContent =
+          "Three.js (3D library) is not available in this environment, so a full 3D scene can't be rendered. The 2D editor still works normally.";
+        threeContainer.appendChild(msg);
+        return;
+      }
+
+      const width = threeContainer.clientWidth;
+      const height = threeContainer.clientHeight;
+
+      threeRenderer = new THREE.WebGLRenderer({ antialias: true });
+      threeRenderer.setSize(width, height);
+      threeContainer.appendChild(threeRenderer.domElement);
+
+      threeScene = new THREE.Scene();
+      threeScene.background = new THREE.Color(0x111111);
+
+      threeCamera = new THREE.PerspectiveCamera(45, width / height, 1, 100000);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      threeScene.add(ambient);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(0, 1000, 500);
+      threeScene.add(dirLight);
+
+      // Bounds
+      let minX = Infinity,
+        maxX = -Infinity,
+        minY = Infinity,
+        maxY = -Infinity;
+      for (const l of lines) {
+        minX = Math.min(minX, l.x1, l.x2);
+        maxX = Math.max(maxX, l.x1, l.x2);
+        minY = Math.min(minY, l.y1, l.y2);
+        maxY = Math.max(maxY, l.y1, l.y2);
+      }
+      if (!isFinite(minX)) {
+        minX = -200;
+        maxX = 200;
+        minY = -200;
+        maxY = 200;
+      }
+      const centerX = (minX + maxX) / 2;
+      const centerZ = -((minY + maxY) / 2);
+      const sizeX = Math.max(maxX - minX, 200);
+      const sizeY = Math.max(maxY - minY, 200);
+      const radius = Math.max(sizeX, sizeY) * 1.4;
+
+      let wallThickness = parseFloat(wallThicknessInput.value);
+      if (!isFinite(wallThickness) || wallThickness <= 0) wallThickness = 6;
+
+      let ceilingInches =
+        parseLengthToInches(ceilingHeightInput.value || "") || 96;
+      if (!isFinite(ceilingInches) || ceilingInches <= 0) ceilingInches = 96;
+
+      let doorTrim = parseLengthToInches(doorTrimInput.value || "");
+      if (!doorTrim || !isFinite(doorTrim) || doorTrim < 0) doorTrim = 0;
+      let windowTrim = parseLengthToInches(windowTrimInput.value || "");
+      if (!windowTrim || !isFinite(windowTrim) || windowTrim < 0)
+        windowTrim = 0;
+
+      // Floor
+      const floorGeom = new THREE.PlaneGeometry(sizeX * 1.5, sizeY * 1.5);
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: 0x444444,
+        side: THREE.DoubleSide,
+      });
+      const floor = new THREE.Mesh(floorGeom, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.set(centerX, 0, centerZ);
+      threeScene.add(floor);
+
+      for (const l of lines) {
+        const kind = lineKind(l);
+        const dx = l.x2 - l.x1;
+        const dy = l.y2 - l.y1;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        if (length < 1) continue;
+
+        const centerWx = (l.x1 + l.x2) / 2;
+        const centerWy = (l.y1 + l.y2) / 2;
+        const centerWz = -centerWy;
+
+        const dz = -(l.y2 - l.y1);
+        const angle = Math.atan2(dz, dx);
+
+        let height = ceilingInches;
+        let thickness = wallThickness;
+        let color = 0xcccccc;
+        let yCenter;
+
+        if (kind === "wall") {
+          height = ceilingInches;
+          thickness = wallThickness;
+          color = 0xcccccc;
+          yCenter = height / 2;
+        } else if (kind === "door") {
+          height = l.heightInches || 80;
+          thickness = wallThickness * 0.6;
+          color = 0x996633;
+          const baseOffset =
+            l.baseOffsetInches != null && isFinite(l.baseOffsetInches)
+              ? l.baseOffsetInches
+              : 0;
+          yCenter = baseOffset + height / 2;
+        } else if (kind === "window") {
+          height = l.heightInches || 48;
+          thickness = wallThickness * 0.5;
+          color = 0x3399ff;
+          const baseOffset =
+            l.baseOffsetInches != null && isFinite(l.baseOffsetInches)
+              ? l.baseOffsetInches
+              : 36;
+          yCenter = baseOffset + height / 2;
+        } else {
+          continue;
+        }
+
+        const geom = new THREE.BoxGeometry(length, height, thickness);
+        const mat = new THREE.MeshStandardMaterial({ color });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.set(centerWx, yCenter, centerWz);
+        mesh.rotation.y = angle;
+        threeScene.add(mesh);
+
+        // Trim / molding for doors & windows
+        if (kind === "door" && doorTrim > 0) {
+          const trimGeom = new THREE.BoxGeometry(
+            length + 2 * doorTrim,
+            height + 2 * doorTrim,
+            wallThickness * 0.3
+          );
+          const trimMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+          const trimMesh = new THREE.Mesh(trimGeom, trimMat);
+          trimMesh.position.set(centerWx, yCenter, centerWz);
+          trimMesh.rotation.y = angle;
+          threeScene.add(trimMesh);
+        } else if (kind === "window" && windowTrim > 0) {
+          const trimGeom = new THREE.BoxGeometry(
+            length + 2 * windowTrim,
+            height + 2 * windowTrim,
+            wallThickness * 0.25
+          );
+          const trimMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+          });
+          const trimMesh = new THREE.Mesh(trimGeom, trimMat);
+          trimMesh.position.set(centerWx, yCenter, centerWz);
+          trimMesh.rotation.y = angle;
+          threeScene.add(trimMesh);
+        }
+      }
+
+      // Camera positioning
+      threeCamera.position.set(
+        centerX + radius,
+        ceilingInches * 1.2,
+        centerZ + radius
+      );
+      threeCamera.lookAt(centerX, 0, centerZ);
+
+      // Store orbit data
+      threeCamera.orbitCenter = new THREE.Vector3(centerX, 0, centerZ);
+      threeCamera.orbitRadius = radius;
+      threeCamera.orbitPhi = Math.atan2(
+        threeCamera.position.z - threeCamera.orbitCenter.z,
+        threeCamera.position.x - threeCamera.orbitCenter.x
+      );
+      threeCamera.orbitTheta = Math.asin(
+        (threeCamera.position.y - threeCamera.orbitCenter.y) / radius
+      );
+
+      // Animation loop
+      function renderThreeLoop() {
+        threeRenderer.render(threeScene, threeCamera);
+        requestAnimationFrame(renderThreeLoop);
+      }
+      renderThreeLoop();
+
+      // Mouse controls for 3D scene
+      let isMouseDownThree = false;
+      let lastMouseX = 0;
+      let lastMouseY = 0;
+
+      threeContainer.addEventListener("mousedown", (e) => {
+        isMouseDownThree = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+      });
+
+      threeContainer.addEventListener("mousemove", (e) => {
+        if (!isMouseDownThree || !threeCamera.orbitCenter) return;
+
+        const deltaX = e.clientX - lastMouseX;
+        const deltaY = e.clientY - lastMouseY;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+
+        // Rotate camera around the center point
+        const rotationSpeed = 0.01;
+        threeCamera.orbitPhi -= deltaX * rotationSpeed;
+        threeCamera.orbitTheta += deltaY * rotationSpeed;
+
+        // Clamp theta to avoid flipping
+        const maxTheta = Math.PI / 2 - 0.1;
+        threeCamera.orbitTheta = Math.max(-maxTheta, Math.min(maxTheta, threeCamera.orbitTheta));
+
+        // Update camera position
+        const x =
+          threeCamera.orbitCenter.x +
+          threeCamera.orbitRadius * Math.cos(threeCamera.orbitTheta) * Math.cos(threeCamera.orbitPhi);
+        const y =
+          threeCamera.orbitCenter.y +
+          threeCamera.orbitRadius * Math.sin(threeCamera.orbitTheta);
+        const z =
+          threeCamera.orbitCenter.z +
+          threeCamera.orbitRadius * Math.cos(threeCamera.orbitTheta) * Math.sin(threeCamera.orbitPhi);
+
+        threeCamera.position.set(x, y, z);
+        threeCamera.lookAt(threeCamera.orbitCenter);
+      });
+
+      threeContainer.addEventListener("mouseup", () => {
+        isMouseDownThree = false;
+      });
+
+      threeContainer.addEventListener("mouseleave", () => {
+        isMouseDownThree = false;
+      });
+
+      // Wheel zoom
+      threeContainer.addEventListener("wheel", (e) => {
+        if (!threeCamera.orbitCenter) return;
+        e.preventDefault();
+        const zoomSpeed = 0.1;
+        const zoomFactor = e.deltaY > 0 ? 1 + zoomSpeed : 1 - zoomSpeed;
+        threeCamera.orbitRadius *= zoomFactor;
+        threeCamera.orbitRadius = Math.max(50, Math.min(5000, threeCamera.orbitRadius));
+
+        // Update camera position with new radius
+        const x =
+          threeCamera.orbitCenter.x +
+          threeCamera.orbitRadius * Math.cos(threeCamera.orbitTheta) * Math.cos(threeCamera.orbitPhi);
+        const y =
+          threeCamera.orbitCenter.y +
+          threeCamera.orbitRadius * Math.sin(threeCamera.orbitTheta);
+        const z =
+          threeCamera.orbitCenter.z +
+          threeCamera.orbitRadius * Math.cos(threeCamera.orbitTheta) * Math.sin(threeCamera.orbitPhi);
+
+        threeCamera.position.set(x, y, z);
+        threeCamera.lookAt(threeCamera.orbitCenter);
+      }, { passive: false });
+    }
+
+    generate3DBtn.addEventListener("click", generate3DScene);
+
+    threeCloseBtn.addEventListener("click", () => {
+      threeContainer.style.display = "none";
+      if (threeRenderer) {
+        threeRenderer.dispose();
+        threeRenderer = null;
+      }
+      threeScene = null;
+      threeCamera = null;
+    });
+
+    // === Init ========================================================
+    resizeCanvas();
+    draw();
+  </script>
+</body>
+</html>
+''
