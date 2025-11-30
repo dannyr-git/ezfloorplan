@@ -61,7 +61,7 @@ export function updateSelectionPanel() {
   }
 
   // Show Selected Element panel
-  if (selectedElementPanel) selectedElementPanel.style.display = "flex";
+  if (selectedElementPanel) selectedElementPanel.style.display = "block";
 
   const kind = lineKind(line);
   const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1);
