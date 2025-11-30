@@ -670,5 +670,3 @@ function loadFromLocalStorage() {
     alert("Failed to load from local storage: " + err.message);
   }
 }
-  }
-}
