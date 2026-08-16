@@ -354,6 +354,212 @@ export function getWallOffsetsForElement(element) {
   };
 }
 
+// === Label mode ==================================================
+// Inline measurements are dropped whenever a line is too short on screen to
+// fit the pill, which means zooming out hides every dimension. Label mode
+// swaps them for a lettered badge — which always fits — plus a legend
+// listing every length.
+
+const BADGE_FONT = "bold 10px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const LEGEND_FONT = "11px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const LEGEND_FONT_BOLD = "bold 11px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+// 0 -> A, 25 -> Z, 26 -> AA, 27 -> AB ...
+export function indexToLetters(index) {
+  let letters = "";
+  let n = index;
+  while (n >= 0) {
+    letters = String.fromCharCode(65 + (n % 26)) + letters;
+    n = Math.floor(n / 26) - 1;
+  }
+  return letters;
+}
+
+function badgeRadiusFor(ctx, letter) {
+  ctx.save();
+  ctx.font = BADGE_FONT;
+  const textWidth = ctx.measureText(letter).width;
+  ctx.restore();
+  return Math.max(9, textWidth / 2 + 5);
+}
+
+// Find a spot for a badge that doesn't sit on top of one already placed.
+// Preferred spot is the line's midpoint; otherwise step out along the normal,
+// alternating sides, and report that a leader line is needed.
+function placeBadge(placed, cx, cy, nx, ny, radius, fitsOnLine) {
+  const candidates = [];
+  if (fitsOnLine) candidates.push({ x: cx, y: cy, leader: false });
+
+  const step = radius * 2 + 5;
+  for (let i = 1; i <= 8; i++) {
+    candidates.push({ x: cx + nx * step * i, y: cy + ny * step * i, leader: true });
+    candidates.push({ x: cx - nx * step * i, y: cy - ny * step * i, leader: true });
+  }
+
+  for (const candidate of candidates) {
+    let clashes = false;
+    for (const other of placed) {
+      const dx = candidate.x - other.x;
+      const dy = candidate.y - other.y;
+      if (Math.hypot(dx, dy) < radius + other.radius + 3) {
+        clashes = true;
+        break;
+      }
+    }
+    if (!clashes) return candidate;
+  }
+
+  return candidates[candidates.length - 1];
+}
+
+function drawLabelBadge(ctx, badge) {
+  const { x, y, radius, letter, color, isSelected, leader, anchorX, anchorY } = badge;
+
+  if (leader) {
+    const dx = x - anchorX;
+    const dy = y - anchorY;
+    const dist = Math.hypot(dx, dy);
+    if (dist > radius) {
+      const ux = dx / dist;
+      const uy = dy / dist;
+      ctx.save();
+      ctx.setLineDash([2, 3]);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(anchorX, anchorY);
+      ctx.lineTo(x - ux * radius, y - uy * radius);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.lineWidth = isSelected ? 2 : 1.5;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+
+  ctx.font = BADGE_FONT;
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(letter, x, y);
+  ctx.restore();
+}
+
+function drawLegend(ctx, entries, canvasWidth, canvasHeight) {
+  if (!entries.length) return;
+
+  const padding = 10;
+  const rowHeight = 15;
+  const titleHeight = 18;
+  const keyHeight = 15;
+  const boxPadding = 8;
+  const letterColumnWidth = 26;
+
+  ctx.save();
+  ctx.font = LEGEND_FONT;
+
+  let widestValue = 0;
+  for (const entry of entries) {
+    widestValue = Math.max(widestValue, ctx.measureText(entry.lengthText).width);
+  }
+  const columnWidth = letterColumnWidth + widestValue + 14;
+
+  // Flow into columns so a long wall list stays on screen
+  const availableHeight = canvasHeight - padding * 2 - boxPadding * 2 - titleHeight - keyHeight;
+  const rowsPerColumn = Math.max(1, Math.floor(availableHeight / rowHeight));
+  const maxColumns = Math.max(1, Math.floor((canvasWidth * 0.5 - boxPadding * 2) / columnWidth));
+
+  let columns = Math.ceil(entries.length / rowsPerColumn);
+  let shown = entries;
+  let truncated = 0;
+  if (columns > maxColumns) {
+    columns = maxColumns;
+    const capacity = columns * rowsPerColumn;
+    truncated = entries.length - capacity;
+    shown = entries.slice(0, capacity);
+  }
+
+  const rows = Math.min(rowsPerColumn, shown.length);
+  const boxWidth = columns * columnWidth + boxPadding * 2;
+  const boxHeight =
+    titleHeight + keyHeight + rows * rowHeight + boxPadding * 2 + (truncated ? rowHeight : 0);
+  const boxX = padding;
+  const boxY = padding;
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
+  ctx.strokeStyle = "#bbbbbb";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 5);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+
+  ctx.font = LEGEND_FONT_BOLD;
+  ctx.fillStyle = "#333333";
+  ctx.fillText("Legend", boxX + boxPadding, boxY + boxPadding + titleHeight / 2);
+
+  // Colour key, so the badge colours are readable without guessing
+  const key = [
+    { label: "Wall", color: "#333333" },
+    { label: "Door", color: "#aa5500" },
+    { label: "Window", color: "#0074d9" },
+  ];
+  ctx.font = "10px system-ui, -apple-system, sans-serif";
+  let keyX = boxX + boxPadding;
+  const keyY = boxY + boxPadding + titleHeight + keyHeight / 2;
+  for (const item of key) {
+    ctx.fillStyle = item.color;
+    ctx.beginPath();
+    ctx.arc(keyX + 3, keyY, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#666666";
+    ctx.fillText(item.label, keyX + 9, keyY);
+    keyX += 9 + ctx.measureText(item.label).width + 8;
+  }
+
+  const firstRowY = boxY + boxPadding + titleHeight + keyHeight;
+  shown.forEach((entry, i) => {
+    const column = Math.floor(i / rowsPerColumn);
+    const row = i % rowsPerColumn;
+    const x = boxX + boxPadding + column * columnWidth;
+    const y = firstRowY + row * rowHeight + rowHeight / 2;
+
+    if (entry.isSelected) {
+      ctx.fillStyle = "rgba(255, 65, 54, 0.12)";
+      ctx.fillRect(x - 3, y - rowHeight / 2, columnWidth - 6, rowHeight);
+    }
+
+    ctx.font = LEGEND_FONT_BOLD;
+    ctx.fillStyle = entry.color;
+    ctx.fillText(entry.letter, x, y);
+
+    ctx.font = LEGEND_FONT;
+    ctx.fillStyle = "#333333";
+    ctx.fillText(entry.lengthText, x + letterColumnWidth, y);
+  });
+
+  if (truncated > 0) {
+    ctx.font = LEGEND_FONT;
+    ctx.fillStyle = "#888888";
+    ctx.fillText(
+      `+${truncated} more (zoom in or widen the window)`,
+      boxX + boxPadding,
+      firstRowY + rows * rowHeight + rowHeight / 2
+    );
+  }
+
+  ctx.restore();
+}
+
 // === Main draw function ==========================================
 
 export function draw() {
@@ -396,6 +602,9 @@ export function draw() {
   const showWallsCheckbox = dom.getShowWallsCheckbox();
   const wallThicknessInput = dom.getWallThicknessInput();
   
+  const labelModeCheckbox = dom.getLabelModeCheckbox();
+  const labelMode = !!(labelModeCheckbox && labelModeCheckbox.checked);
+
   const showWalls = showWallsCheckbox && showWallsCheckbox.checked ? true : false;
   let wallThickness = 0;
   if (showWalls && wallThicknessInput) {
@@ -495,17 +704,25 @@ export function draw() {
   }
 
   // Lines + endpoints + labels
-  // First pass: identify walls with elements on them
+  // First pass: identify walls with elements on them. Only needed to nudge the
+  // inline pills, which label mode doesn't draw, so skip the ray casting there.
   const wallsWithElements = new Set();
-  for (const l of lines) {
-    if (lineKind(l) !== "wall") continue;
-    const elements = getElementsOnWall(l, lines);
-    if (elements.length > 0) {
-      wallsWithElements.add(l.id);
+  if (!labelMode) {
+    for (const l of lines) {
+      if (lineKind(l) !== "wall") continue;
+      const elements = getElementsOnWall(l, lines);
+      if (elements.length > 0) {
+        wallsWithElements.add(l.id);
+      }
     }
   }
 
-  for (const l of lines) {
+  // Label mode: one letter per element, in creation order, plus the badges
+  // and legend rows built up as we walk the lines
+  const placedBadges = [];
+  const legendEntries = [];
+
+  for (const [lineIndex, l] of lines.entries()) {
     const kind = lineKind(l);
     const isSelected = l.id === state.getSelectedLineId();
 
@@ -542,7 +759,7 @@ export function draw() {
     
     // Determine label position offset if wall has elements
     let labelOffsetRatio = 0.5; // default center
-    if (kind === "wall" && wallsWithElements.has(l.id)) {
+    if (!labelMode && kind === "wall" && wallsWithElements.has(l.id)) {
       // Get wall dimension offset direction
       const wallThicknessInput = dom.getWallThicknessInput();
       let wallThickness = 6;
@@ -555,7 +772,47 @@ export function draw() {
       labelOffsetRatio = offset.offsetDirection > 0 ? 0.35 : 0.65;
     }
     
-    if (screenLen > gapWidth + 20) {
+    if (labelMode) {
+      // Solid line — the badge and the legend carry the measurement
+      ctx.beginPath();
+      ctx.moveTo(sx1, sy1);
+      ctx.lineTo(sx2, sy2);
+      ctx.stroke();
+
+      const letter = indexToLetters(lineIndex);
+      const radius = badgeRadiusFor(ctx, letter);
+      const midSx = (sx1 + sx2) / 2;
+      const midSy = (sy1 + sy2) / 2;
+
+      // Normal to the line, for pushing the badge clear of short walls
+      let nx = 0;
+      let ny = -1;
+      if (screenLen > 0) {
+        nx = -(sy2 - sy1) / screenLen;
+        ny = (sx2 - sx1) / screenLen;
+      }
+
+      const fitsOnLine = screenLen > radius * 2 + 6;
+      const spot = placeBadge(placedBadges, midSx, midSy, nx, ny, radius, fitsOnLine);
+
+      placedBadges.push({
+        x: spot.x,
+        y: spot.y,
+        radius,
+        letter,
+        color: strokeColor,
+        isSelected,
+        leader: spot.leader,
+        anchorX: midSx,
+        anchorY: midSy,
+      });
+      legendEntries.push({
+        letter,
+        lengthText: label,
+        color: strokeColor,
+        isSelected,
+      });
+    } else if (screenLen > gapWidth + 20) {
       // Calculate gap position
       const midSx = sx1 + (sx2 - sx1) * labelOffsetRatio;
       const midSy = sy1 + (sy2 - sy1) * labelOffsetRatio;
@@ -647,9 +904,15 @@ export function draw() {
     drawEndpoint(l.x2, l.y2);
 
     // Draw dimension brackets for windows and doors (unified - they're the same type of element)
-    if ((kind === "window" || kind === "door") && len > 0) {
+    // Label mode leaves these out: they're the clutter it exists to avoid.
+    if (!labelMode && (kind === "window" || kind === "door") && len > 0) {
       drawOpeningDimensions(ctx, l, kind);
     }
+  }
+
+  // Badges go on top of every line so leaders and letters stay readable
+  for (const badge of placedBadges) {
+    drawLabelBadge(ctx, badge);
   }
 
   // In-progress drawing
@@ -744,6 +1007,11 @@ export function draw() {
       
       ctx.restore();
     }
+  }
+
+  // Legend for label mode
+  if (labelMode) {
+    drawLegend(ctx, legendEntries, w, h);
   }
 
   // Zoomed misalignment diagram

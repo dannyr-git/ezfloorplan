@@ -357,7 +357,10 @@ function exportToJson() {
   const doorTrimInput = dom.getDoorTrimInput();
   const windowTrimInput = dom.getWindowTrimInput();
   
+  const labelModeCheckbox = dom.getLabelModeCheckbox();
+
   const settings = {};
+  if (labelModeCheckbox) settings.labelMode = labelModeCheckbox.checked;
   if (showWallsCheckbox) settings.showWalls = showWallsCheckbox.checked;
   if (wallThicknessInput && wallThicknessInput.value) settings.wallThickness = wallThicknessInput.value;
   if (ceilingHeightInput && ceilingHeightInput.value) settings.ceilingHeight = ceilingHeightInput.value;
@@ -452,6 +455,10 @@ function importFromJson() {
     const doorTrimInput = dom.getDoorTrimInput();
     const windowTrimInput = dom.getWindowTrimInput();
     
+    const labelModeCheckbox = dom.getLabelModeCheckbox();
+    if (labelModeCheckbox && settings.labelMode !== undefined) {
+      labelModeCheckbox.checked = settings.labelMode;
+    }
     if (showWallsCheckbox && settings.showWalls !== undefined) {
       showWallsCheckbox.checked = settings.showWalls;
     }
@@ -544,6 +551,10 @@ export function initUIEventHandlers() {
   }
 
   // Wall display settings
+  const labelModeCheckbox = dom.getLabelModeCheckbox();
+  if (labelModeCheckbox) {
+    labelModeCheckbox.addEventListener("change", draw);
+  }
   if (showWallsCheckbox) {
     showWallsCheckbox.addEventListener("change", draw);
   }

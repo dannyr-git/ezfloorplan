@@ -43,6 +43,7 @@ let flipWallFacingBtn = null;
 let flipWallFacingHint = null;
 
 // Settings elements
+let labelModeCheckbox = null;
 let showWallsCheckbox = null;
 let wallThicknessInput = null;
 let ceilingHeightInput = null;
@@ -108,6 +109,7 @@ export function initDOM() {
   flipWallFacingBtn = document.getElementById("flipWallFacingBtn");
   flipWallFacingHint = document.getElementById("flipWallFacingHint");
 
+  labelModeCheckbox = document.getElementById("labelModeCheckbox");
   showWallsCheckbox = document.getElementById("showWallsCheckbox");
   wallThicknessInput = document.getElementById("wallThicknessInput");
   ceilingHeightInput = document.getElementById("ceilingHeightInput");
@@ -170,6 +172,7 @@ export function getFlipWallFacingField() { return flipWallFacingField; }
 export function getFlipWallFacingBtn() { return flipWallFacingBtn; }
 export function getFlipWallFacingHint() { return flipWallFacingHint; }
 
+export function getLabelModeCheckbox() { return labelModeCheckbox; }
 export function getShowWallsCheckbox() { return showWallsCheckbox; }
 export function getWallThicknessInput() { return wallThicknessInput; }
 export function getCeilingHeightInput() { return ceilingHeightInput; }
