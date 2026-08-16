@@ -25,6 +25,7 @@ const appState = {
   // Selection
   selectedLineId: null,
   selectedLines: [], // Array of line IDs for multi-select
+  selectionBox: null, // { x1, y1, x2, y2 } in world coords while drag-selecting
 
   // Panning state
   isPanning: false,
@@ -69,6 +70,7 @@ export function getIsDrawing() { return appState.isDrawing; }
 export function getCurrentDrawing() { return appState.currentDrawing; }
 export function getSelectedLineId() { return appState.selectedLineId; }
 export function getSelectedLines() { return appState.selectedLines; }
+export function getSelectionBox() { return appState.selectionBox; }
 export function getIsPanning() { return appState.isPanning; }
 export function getPanStartScreenX() { return appState.panStartScreenX; }
 export function getPanStartScreenY() { return appState.panStartScreenY; }
@@ -96,6 +98,7 @@ export function setIsDrawing(val) { appState.isDrawing = val; }
 export function setCurrentDrawing(val) { appState.currentDrawing = val; }
 export function setSelectedLineId(val) { appState.selectedLineId = val; }
 export function setSelectedLines(val) { appState.selectedLines = val || []; }
+export function setSelectionBox(val) { appState.selectionBox = val; }
 export function setIsPanning(val) { appState.isPanning = val; }
 export function setPanStartScreenX(val) { appState.panStartScreenX = val; }
 export function setPanStartScreenY(val) { appState.panStartScreenY = val; }

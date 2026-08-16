@@ -2,6 +2,49 @@ import * as state from './state.js';
 import * as dom from './dom.js';
 import { parseLengthToInches, lineKind } from './utils.js';
 
+// === Active scene teardown ========================================
+// Handles for the currently live scene. Without these, every "Generate 3D"
+// leaks a WebGL context plus two animation loops that keep rendering after
+// the overlay is closed.
+
+let renderLoopId = null;
+let walkLoopId = null;
+let sceneKeyHandlers = null;
+let pointerLockHandler = null;
+
+function disposeActiveScene() {
+  if (renderLoopId !== null) {
+    cancelAnimationFrame(renderLoopId);
+    renderLoopId = null;
+  }
+  if (walkLoopId !== null) {
+    cancelAnimationFrame(walkLoopId);
+    walkLoopId = null;
+  }
+
+  if (sceneKeyHandlers) {
+    document.removeEventListener('keydown', sceneKeyHandlers.keydown);
+    document.removeEventListener('keyup', sceneKeyHandlers.keyup);
+    sceneKeyHandlers = null;
+  }
+
+  if (pointerLockHandler) {
+    document.removeEventListener('pointerlockchange', pointerLockHandler);
+    pointerLockHandler = null;
+  }
+
+  const threeRenderer = state.getThreeRenderer();
+  if (threeRenderer) {
+    threeRenderer.dispose();
+    if (threeRenderer.domElement && threeRenderer.domElement.parentNode) {
+      threeRenderer.domElement.parentNode.removeChild(threeRenderer.domElement);
+    }
+    state.setThreeRenderer(null);
+  }
+  state.setThreeScene(null);
+  state.setThreeCamera(null);
+}
+
 // === Helper: Find elements on a wall ==============================
 
 function getElementsOnWall(wall, lines) {
@@ -56,6 +99,9 @@ export function generate3DScene() {
   const ceilingHeightInput = dom.getCeilingHeightInput();
   const doorTrimInput = dom.getDoorTrimInput();
   const windowTrimInput = dom.getWindowTrimInput();
+
+  // Tear down any previous scene before building a new one
+  disposeActiveScene();
 
   threeContainer.style.display = "block";
   threeContainer.innerHTML = "";
@@ -468,7 +514,7 @@ export function generate3DScene() {
   // Animation loop
   function renderThreeLoop() {
     threeRenderer.render(threeScene, threeCamera);
-    requestAnimationFrame(renderThreeLoop);
+    renderLoopId = requestAnimationFrame(renderThreeLoop);
   }
   renderThreeLoop();
 
@@ -494,10 +540,7 @@ export function generate3DScene() {
     }
   };
 
-  if (threeContainer._pointerLockHandler) {
-    document.removeEventListener('pointerlockchange', threeContainer._pointerLockHandler);
-  }
-  threeContainer._pointerLockHandler = pointerLockChangeHandler;
+  pointerLockHandler = pointerLockChangeHandler;
   document.addEventListener('pointerlockchange', pointerLockChangeHandler);
 
   threeContainer.addEventListener("mousedown", (e) => {
@@ -693,10 +736,9 @@ export function generate3DScene() {
     }
   }
 
-  let walkAnimationId = null;
   function walkLoop() {
     handleWalkMovement();
-    walkAnimationId = requestAnimationFrame(walkLoop);
+    walkLoopId = requestAnimationFrame(walkLoop);
   }
   walkLoop();
 
@@ -802,6 +844,7 @@ export function generate3DScene() {
     keysPressed.delete(e.code);
   }
 
+  sceneKeyHandlers = { keydown: handleKeyDown, keyup: handleKeyUp };
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
 }
@@ -814,20 +857,10 @@ export function close3DScene() {
     document.exitPointerLock();
   }
 
-  if (threeContainer._pointerLockHandler) {
-    document.removeEventListener('pointerlockchange', threeContainer._pointerLockHandler);
-    delete threeContainer._pointerLockHandler;
-  }
-
   const indicator = document.getElementById('walkModeIndicator');
   if (indicator) {
     indicator.remove();
   }
 
-  if (state.threeRenderer) {
-    state.threeRenderer.dispose();
-    state.setThreeRenderer(null);
-  }
-  state.setThreeScene(null);
-  state.setThreeCamera(null);
+  disposeActiveScene();
 }

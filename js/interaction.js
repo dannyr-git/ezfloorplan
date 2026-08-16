@@ -124,32 +124,26 @@ export function snapPoint(worldRaw, anchorWorld) {
 
 // === Selection box and clipboard ================================
 
-let selectionBox = null; // { x1, y1, x2, y2 } in world coords
 let clipboard = null; // Array of copied lines
 let dragMultiSelectStartPos = null; // Track if we're dragging multi-selected lines
 
-function getLinesBoundingBox(lines) {
-  if (lines.length === 0) return null;
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const l of lines) {
-    minX = Math.min(minX, l.x1, l.x2);
-    maxX = Math.max(maxX, l.x1, l.x2);
-    minY = Math.min(minY, l.y1, l.y2);
-    maxY = Math.max(maxY, l.y1, l.y2);
-  }
-  return { minX, maxX, minY, maxY };
-}
-
 function linesInBox(box) {
+  // The box corners are drag start/end, so they arrive unordered — normalize
+  // them or dragging up/left never matches anything.
+  const boxMinX = Math.min(box.x1, box.x2);
+  const boxMaxX = Math.max(box.x1, box.x2);
+  const boxMinY = Math.min(box.y1, box.y2);
+  const boxMaxY = Math.max(box.y1, box.y2);
+
   const selected = [];
   for (const l of state.getLines()) {
     const x1 = Math.min(l.x1, l.x2);
     const x2 = Math.max(l.x1, l.x2);
     const y1 = Math.min(l.y1, l.y2);
     const y2 = Math.max(l.y1, l.y2);
-    
+
     // Check if line overlaps with box
-    if (x2 >= box.x1 && x1 <= box.x2 && y2 >= box.y1 && y1 <= box.y2) {
+    if (x2 >= boxMinX && x1 <= boxMaxX && y2 >= boxMinY && y1 <= boxMaxY) {
       selected.push(l);
     }
   }
@@ -216,7 +210,7 @@ function handleMouseDown(evt) {
       selectLine(line);
     } else {
       // Start drag selection
-      selectionBox = { x1: worldPt.x, y1: worldPt.y, x2: worldPt.x, y2: worldPt.y };
+      state.setSelectionBox({ x1: worldPt.x, y1: worldPt.y, x2: worldPt.x, y2: worldPt.y });
       selectLine(null);
     }
     return;
@@ -331,10 +325,10 @@ function handleMouseMove(evt) {
   }
 
   // Update drag selection box
+  const selectionBox = state.getSelectionBox();
   if (state.getMode() === "select" && selectionBox) {
     selectionBox.x2 = worldPt.x;
     selectionBox.y2 = worldPt.y;
-    window.__selectionBox = selectionBox;
     draw();
     return;
   }
@@ -388,10 +382,10 @@ function handleMouseUp() {
   }
 
   // Finish drag selection box
+  const selectionBox = state.getSelectionBox();
   if (state.getMode() === "select" && selectionBox) {
     const selected = linesInBox(selectionBox);
-    selectionBox = null;
-    window.__selectionBox = null;
+    state.setSelectionBox(null);
     // Select all lines in the box (for now, just highlight them)
     state.setSelectedLines(selected.map(l => l.id));
     draw();
@@ -405,6 +399,9 @@ function handleMouseLeave() {
   state.setDraggingEndpoint(null);
   state.setDragStateSaved(false);
   state.setHoverJoint(null);
+  // Otherwise an abandoned drag leaves its box painted on the canvas
+  state.setSelectionBox(null);
+  dragMultiSelectStartPos = null;
   draw();
 }
 
@@ -475,24 +472,28 @@ function handleKeyDown(e) {
     e.preventDefault();
     if (clipboard && clipboard.length > 0) {
       state.saveState();
-      const box = getLinesBoundingBox(clipboard);
-      const offsetX = box ? box.minX : 0;
-      const offsetY = box ? box.minY : 0;
-      
+      // Offset one grid square from the source so the copy is visible but lands
+      // next to what it was copied from, not at a fixed spot in the plan.
+      const pasteOffset = state.GRID_SPACING;
+
       const pastedIds = [];
+      const pastedLines = [];
       for (const line of clipboard) {
         const newLine = {
           ...line,
           id: state.getNextLineId(),
-          x1: line.x1 - offsetX + 50,
-          y1: line.y1 - offsetY + 50,
-          x2: line.x2 - offsetX + 50,
-          y2: line.y2 - offsetY + 50,
+          x1: line.x1 + pasteOffset,
+          y1: line.y1 + pasteOffset,
+          x2: line.x2 + pasteOffset,
+          y2: line.y2 + pasteOffset,
         };
         state.addLine(newLine);
         state.setNextLineId(state.getNextLineId() + 1);
         pastedIds.push(newLine.id);
+        pastedLines.push({ ...newLine, id: undefined });
       }
+      // Cascade repeated pastes instead of stacking them all in one place
+      clipboard = pastedLines;
       state.setSelectedLines(pastedIds);
       updateSelectionPanel();
       draw();

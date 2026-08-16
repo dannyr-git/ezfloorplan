@@ -594,7 +594,7 @@ export function initUIEventHandlers() {
   modeRadios.forEach((r) => {
     r.addEventListener("change", () => {
       state.setMode(r.value);
-      canvas.style.cursor = state.mode === "draw" ? "crosshair" : "default";
+      canvas.style.cursor = state.getMode() === "draw" ? "crosshair" : "default";
     });
   });
 

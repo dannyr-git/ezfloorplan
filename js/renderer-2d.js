@@ -672,8 +672,8 @@ export function draw() {
   }
 
   // Draw selection box
-  if (window.__selectionBox) {
-    const box = window.__selectionBox;
+  const box = state.getSelectionBox();
+  if (box) {
     const sx1 = worldToScreenX(Math.min(box.x1, box.x2));
     const sy1 = worldToScreenY(Math.min(box.y1, box.y2));
     const sx2 = worldToScreenX(Math.max(box.x1, box.x2));
